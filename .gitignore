@@ -1,0 +1,45 @@
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.db
+*.opendb
+
+# CMake
+build/
+CMakeFiles/
+CMakeCache.txt
+*.cmake
+install/
+
+# Cinema 4D / Maxon
+*.pdb
+*.exp
+*.lib
+*.xdl64
+_frameworks/
+_generated/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Agent Artifacts
+.gemini/
+.serena/
+brain/
+task.md
+implementation_plan.md
+walkthrough.md
+*.log
+
+# Release Artifacts
+*.zip
+
+# Crash Reports
+_BugReport*.txt

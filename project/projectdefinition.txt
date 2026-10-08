@@ -1,0 +1,10 @@
+Platform=Win64
+Type=DLL
+APIS=\
+cinema.framework;\
+core.framework
+
+C4D=true
+stylecheck.level=0 
+
+ModuleId=net.maxonexample.c4dpiemenu
