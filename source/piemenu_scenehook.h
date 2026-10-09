@@ -30,6 +30,8 @@ private:
     Float       m_originY = 0.0;
     Float       m_currentX = 0.0;
     Float       m_currentY = 0.0;
+    Float       m_lastMouseX = 0.0;
+    Float       m_lastMouseY = 0.0;
     Int32       m_hoveredSlot = NOTOK;
     PieProfile* m_activeProfile = nullptr;
 };
