@@ -8,6 +8,7 @@ namespace cinema
 {
 
 static const Int32 PIE_CONFIG_MAGIC_V2 = 0x50494532; // "PIE2"
+static const Int32 PIE_CONFIG_MAGIC_V3 = 0x50494533; // "PIE3"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -618,11 +619,21 @@ Bool PieProfileManager::LoadFromFile()
     }
 
     Int32 profileCount = 0;
-    Bool isV2 = false;
+    Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V2)
+    if (firstVal == PIE_CONFIG_MAGIC_V3)
     {
-        isV2 = true;
+        version = 3;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        {
+            if (m_profiles.IsEmpty())
+                InitDefaults();
+            return false;
+        }
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V2)
+    {
+        version = 2;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
         {
             if (m_profiles.IsEmpty())
@@ -632,7 +643,7 @@ Bool PieProfileManager::LoadFromFile()
     }
     else if (firstVal > 0 && firstVal <= 1000)
     {
-        isV2 = false;
+        version = 1;
         profileCount = firstVal;
     }
     else
@@ -660,7 +671,7 @@ Bool PieProfileManager::LoadFromFile()
             file->ReadBool(&prof.slots[s].enabled);
         }
 
-        if (isV2)
+        if (version >= 2)
         {
             file->ReadBool(&prof.hotkey.enabled);
             file->ReadBool(&prof.hotkey.ctrl);
@@ -676,6 +687,15 @@ Bool PieProfileManager::LoadFromFile()
             prof.hotkey.shift = true;
             prof.hotkey.alt = false;
             prof.hotkey.vkCode = 0;
+        }
+
+        if (version >= 3)
+        {
+            file->ReadBool(&prof.showTitle);
+        }
+        else
+        {
+            prof.showTitle = true;
         }
 
         m_profiles.Append(prof) iferr_ignore("Append");
@@ -703,8 +723,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V2 header to denote per-profile hotkey format
-    file->WriteInt32(PIE_CONFIG_MAGIC_V2);
+    // Write magic V3 header to denote per-profile showTitle and hotkey format
+    file->WriteInt32(PIE_CONFIG_MAGIC_V3);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -729,6 +749,8 @@ Bool PieProfileManager::SaveToFile()
         file->WriteBool(prof.hotkey.shift);
         file->WriteBool(prof.hotkey.alt);
         file->WriteInt32(prof.hotkey.vkCode);
+
+        file->WriteBool(prof.showTitle);
     }
 
     file->WriteBool(m_useCtrlShift);

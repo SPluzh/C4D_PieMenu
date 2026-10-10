@@ -62,6 +62,7 @@ struct PieProfile
     maxon::String  name;
     PieContextMode context = PieContextMode::Global;
     Int32          slotCount = 8; // 4 or 8
+    Bool           showTitle = true;
     PieSlot        slots[9];      // 0..7 radial, 8 is Center
     PieHotkey      hotkey;
 

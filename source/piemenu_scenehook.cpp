@@ -87,7 +87,15 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
 
     Float angleRad = std::atan2(dy, dx);
     Float deg = angleRad * (180.0 / PI);
-    m_hoveredSlot = m_activeProfile->AngleToSlot(deg, dist, deadzone);
+    Int32 s = m_activeProfile->AngleToSlot(deg, dist, deadzone);
+    Int32 count = m_activeProfile->slotCount;
+    if (count != 4 && count != 8)
+        count = 8;
+    if (s >= 0 && s < count && !m_activeProfile->slots[s].enabled)
+    {
+        s = NOTOK;
+    }
+    m_hoveredSlot = s;
 }
 
 void PieMenuSceneHook::CommitSelection()
@@ -229,6 +237,9 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = m_activeProfile->slots[i];
+        if (!slot.enabled)
+            continue;
+
         Bool isHovered = (m_hoveredSlot == i);
 
         Float rIn = isHovered ? hoverInnerR : baseInnerR;
@@ -239,11 +250,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
         Vector bgCol;
-        if (!slot.enabled)
-        {
-            bgCol = Vector(0.06, 0.06, 0.07);
-        }
-        else if (isHovered)
+        if (isHovered)
         {
             bgCol = Vector(0.14, 0.16, 0.20) + slot.accentColor * 0.22;
         }
@@ -259,13 +266,13 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         // Draw sector body
         drawAnnularSector(ox, oy, rIn, rOut, aStart, aEnd, bgCol, steps);
 
-        // If hovered and enabled: draw illuminated inner arc strip
-        if (isHovered && slot.enabled)
+        // If hovered: draw illuminated inner arc strip
+        if (isHovered)
         {
             Vector activeStripCol = slot.accentColor;
             drawAnnularSector(ox, oy, rIn, rIn + 4.5 * radiusScale, aStart, aEnd, activeStripCol, steps);
         }
-        else if (slot.enabled && slot.commandId > 0)
+        else if (slot.commandId > 0)
         {
             Vector activeStripCol = slot.accentColor * 0.6;
             drawAnnularSector(ox, oy, rIn, rIn + 3.0 * radiusScale, aStart, aEnd, activeStripCol, steps);
@@ -276,6 +283,9 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = m_activeProfile->slots[i];
+        if (!slot.enabled)
+            continue;
+
         Bool isHovered = (m_hoveredSlot == i);
 
         Float rIn = isHovered ? hoverInnerR : baseInnerR;
@@ -287,12 +297,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
 
         Vector borderCol;
         Float borderWidth = 1.0;
-        if (!slot.enabled)
-        {
-            borderCol = Vector(0.16, 0.17, 0.19);
-            borderWidth = 1.0;
-        }
-        else if (isHovered)
+        if (isHovered)
         {
             borderCol = slot.accentColor;
             borderWidth = 2.0;
@@ -315,6 +320,9 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = m_activeProfile->slots[i];
+        if (!slot.enabled)
+            continue;
+
         Bool isHovered = (m_hoveredSlot == i);
 
         Float rIn = isHovered ? hoverInnerR : baseInnerR;
@@ -333,11 +341,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         Int32 textY = (Int32)(ty - 5.0);
 
         Vector textCol;
-        if (!slot.enabled)
-        {
-            textCol = Vector(0.38, 0.40, 0.44);
-        }
-        else if (isHovered)
+        if (isHovered)
         {
             textCol = Vector(1.0, 1.0, 1.0);
         }
@@ -414,10 +418,13 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     }
 
     // 6. Context mode badge
-    String badge = "["_s + m_activeProfile->name + "]"_s;
-    Int32 bLen = badge.GetLength();
-    bd->SetPen(Vector(0.50, 0.70, 0.90));
-    bd->DrawHUDText((Int32)(ox - (bLen * 6.5) * 0.5), (Int32)(oy - hoverOuterR - 16.0), badge);
+    if (m_activeProfile->showTitle && m_activeProfile->name.IsPopulated())
+    {
+        String badge = "["_s + m_activeProfile->name + "]"_s;
+        Int32 bLen = badge.GetLength();
+        bd->SetPen(Vector(0.50, 0.70, 0.90));
+        bd->DrawHUDText((Int32)(ox - (bLen * 6.5) * 0.5), (Int32)(oy - hoverOuterR - 16.0), badge);
+    }
 }
 
 

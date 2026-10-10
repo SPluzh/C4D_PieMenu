@@ -633,7 +633,15 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
     {
         Float angleRad = std::atan2(dy, dx);
         Float deg = angleRad * (180.0 / PI);
-        m_hoveredSlot = m_activeProfile->AngleToSlot(deg, dist, deadzone);
+        Int32 s = m_activeProfile->AngleToSlot(deg, dist, deadzone);
+        Int32 count = m_activeProfile->slotCount;
+        if (count != 4 && count != 8)
+            count = 8;
+        if (s >= 0 && s < count && !m_activeProfile->slots[s].enabled)
+        {
+            s = NOTOK;
+        }
+        m_hoveredSlot = s;
     }
 
     if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
@@ -789,11 +797,33 @@ void PieMenuOverlay::RenderOverlay()
         const float gapDeg = (count == 4) ? 2.2f : 1.8f;
         const float deg2rad = (float)(PI / 180.0);
 
-        // 0. Soft radial ambient backdrop shadow
+        // 0. Soft radial ambient backdrop shadow behind visible slots and center hub
         {
             Gdiplus::GraphicsPath shadowPath;
-            float shR = hoverOuterR + 14.0f;
-            shadowPath.AddEllipse(cx - shR, cy - shR, shR * 2.0f, shR * 2.0f);
+            for (Int32 i = 0; i < count; ++i)
+            {
+                if (!m_activeProfile->slots[i].enabled)
+                    continue;
+
+                float rIn = (m_hoveredSlot == i) ? hoverInnerR : baseInnerR;
+                float rOut = (m_hoveredSlot == i) ? hoverOuterR : baseOuterR;
+                float shIn = rIn - 4.0f * radiusScale;
+                if (shIn < 0.0f)
+                    shIn = 0.0f;
+                float shOut = rOut + 8.0f * radiusScale;
+
+                float startDeg = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg + gapDeg * 0.5f;
+                float sweepDeg = sliceDeg - gapDeg;
+
+                shadowPath.AddArc(cx - shOut, cy - shOut, shOut * 2.0f, shOut * 2.0f, startDeg, sweepDeg);
+                shadowPath.AddArc(cx - shIn, cy - shIn, shIn * 2.0f, shIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
+                shadowPath.CloseFigure();
+            }
+
+            // Center hub shadow
+            float shHub = deadzoneRadius + 5.0f;
+            shadowPath.AddEllipse(cx - shHub, cy - shHub, shHub * 2.0f, shHub * 2.0f);
+
             Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(55, 0, 0, 0));
             g.FillPath(&shadowBrush, &shadowPath);
         }
@@ -802,6 +832,9 @@ void PieMenuOverlay::RenderOverlay()
         for (Int32 i = 0; i < count; ++i)
         {
             const PieSlot& slot = m_activeProfile->slots[i];
+            if (!slot.enabled)
+                continue;
+
             Bool isHovered = (m_hoveredSlot == i);
 
             float rIn = isHovered ? hoverInnerR : baseInnerR;
@@ -817,11 +850,7 @@ void PieMenuOverlay::RenderOverlay()
 
             // Background color
             Gdiplus::Color bgCol;
-            if (!slot.enabled)
-            {
-                bgCol = Gdiplus::Color(170, 16, 17, 20);
-            }
-            else if (isHovered)
+            if (isHovered)
             {
                 BYTE r = (BYTE)LocalClampInt((int)(35 + slot.accentColor.x * 65.0), 0, 255);
                 BYTE gr = (BYTE)LocalClampInt((int)(40 + slot.accentColor.y * 65.0), 0, 255);
@@ -844,7 +873,7 @@ void PieMenuOverlay::RenderOverlay()
             g.FillPath(&bgBrush, &path);
 
             // Active glow inner strip
-            if (isHovered && slot.enabled)
+            if (isHovered)
             {
                 float stripW = 4.5f * radiusScale;
                 Gdiplus::GraphicsPath stripPath;
@@ -857,7 +886,7 @@ void PieMenuOverlay::RenderOverlay()
                 Gdiplus::SolidBrush stripBrush(Gdiplus::Color(255, ar, ag, ab));
                 g.FillPath(&stripBrush, &stripPath);
             }
-            else if (slot.enabled && slot.commandId > 0)
+            else if (slot.commandId > 0)
             {
                 float stripW = 3.0f * radiusScale;
                 Gdiplus::GraphicsPath stripPath;
@@ -874,12 +903,7 @@ void PieMenuOverlay::RenderOverlay()
             // Sector border
             Gdiplus::Color borderCol;
             float borderWidth = 1.0f;
-            if (!slot.enabled)
-            {
-                borderCol = Gdiplus::Color(150, 42, 45, 50);
-                borderWidth = 1.0f;
-            }
-            else if (isHovered)
+            if (isHovered)
             {
                 BYTE ar = (BYTE)(Clamp01(slot.accentColor.x) * 255.0);
                 BYTE ag = (BYTE)(Clamp01(slot.accentColor.y) * 255.0);
@@ -913,6 +937,9 @@ void PieMenuOverlay::RenderOverlay()
         for (Int32 i = 0; i < count; ++i)
         {
             const PieSlot& slot = m_activeProfile->slots[i];
+            if (!slot.enabled)
+                continue;
+
             Bool isHovered = (m_hoveredSlot == i);
 
             float rIn = isHovered ? hoverInnerR : baseInnerR;
@@ -929,11 +956,7 @@ void PieMenuOverlay::RenderOverlay()
             std::wstring wLabel = ToWString(label);
 
             Gdiplus::Color textCol;
-            if (!slot.enabled)
-            {
-                textCol = Gdiplus::Color(160, 100, 105, 115);
-            }
-            else if (isHovered)
+            if (isHovered)
             {
                 textCol = Gdiplus::Color(255, 255, 255, 255);
             }
@@ -1066,6 +1089,7 @@ void PieMenuOverlay::RenderOverlay()
         }
 
         // 5. Context badge at top: e.g. "[Polygons]"
+        if (m_activeProfile->showTitle && m_activeProfile->name.IsPopulated())
         {
             std::wstring wBadge = L"[" + ToWString(m_activeProfile->name) + L"]";
             Gdiplus::Font bFont(L"Segoe UI", 8.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);

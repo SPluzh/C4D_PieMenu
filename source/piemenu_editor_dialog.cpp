@@ -23,6 +23,7 @@ enum
     IDC_PROFILE_NAME_EDIT,
     IDC_PROFILE_CONTEXT_COMBO,
     IDC_SLOTCOUNT_COMBO,
+    IDC_PROFILE_SHOW_TITLE,
 
     IDC_USERAREA_PIE,
     IDC_GROUP_INSPECTOR,
@@ -392,16 +393,17 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddButton(IDC_BTN_DELETE_PROFILE, BFH_LEFT, 75, 0, "- Delete"_s);
     GroupEnd();
 
-    // 2. Active Menu Properties group (Name, Context, Slots)
-    GroupBegin(IDC_GROUP_MENU_SETTINGS, BFH_SCALEFIT, 6, 0, "Menu Properties"_s, BORDER_GROUP_IN);
+    // 2. Active Menu Properties group (Name, Context, Slots, Title)
+    GroupBegin(IDC_GROUP_MENU_SETTINGS, BFH_SCALEFIT, 7, 0, "Menu Properties"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(6, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
-    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 130, 0);
+    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 120, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
-    AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_LEFT, 150, 0);
+    AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_LEFT, 140, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
-    AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 85, 0);
+    AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 80, 0);
+    AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
     GroupEnd();
 
     // 3. Menu Hotkey settings group for the active profile
@@ -729,6 +731,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetString(IDC_PROFILE_NAME_EDIT, prof->name);
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
     SetInt32(IDC_SLOTCOUNT_COMBO, (prof->slotCount == 4) ? 0 : 1);
+    SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
 }
 
 void PieMenuEditorDialog::ApplyMenuSettingsChanges()
@@ -750,6 +753,10 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     Int32 sc = 0;
     if (GetInt32(IDC_SLOTCOUNT_COMBO, sc))
         prof->slotCount = (sc == 0) ? 4 : 8;
+
+    Bool st = true;
+    if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
+        prof->showTitle = st;
 
     RefreshProfileComboList();
     m_userArea.Redraw();
@@ -1085,6 +1092,21 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     prof->slotCount = (sc == 0) ? 4 : 8;
                     m_userArea.Redraw();
                     UpdateInspector();
+                }
+            }
+            break;
+        }
+
+        case IDC_PROFILE_SHOW_TITLE:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Bool st = true;
+                if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
+                {
+                    prof->showTitle = st;
+                    m_userArea.Redraw();
                 }
             }
             break;

@@ -203,17 +203,17 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
         Vector bgCol;
-        if (!slot.enabled)
-        {
-            bgCol = Vector(0.07, 0.07, 0.08);
-        }
-        else if (isDragHover)
+        if (isDragHover)
         {
             bgCol = Vector(0.24, 0.22, 0.12) + slot.accentColor * 0.25;
         }
         else if (isSelected)
         {
             bgCol = Vector(0.14, 0.18, 0.24) + slot.accentColor * 0.25;
+        }
+        else if (!slot.enabled)
+        {
+            bgCol = Vector(0.12, 0.12, 0.13); // matches area background (hole)
         }
         else if (slot.commandId > 0)
         {
@@ -258,12 +258,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         Vector borderCol;
         Float borderWidth = 1.0;
-        if (!slot.enabled)
-        {
-            borderCol = Vector(0.18, 0.18, 0.20);
-            borderWidth = 1.0;
-        }
-        else if (isDragHover)
+        if (isDragHover)
         {
             borderCol = Vector(1.0, 0.9, 0.15); // Bright gold drag highlight
             borderWidth = 2.5;
@@ -272,6 +267,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         {
             borderCol = Vector(0.3, 0.85, 1.0); // Electric cyan selection highlight
             borderWidth = 2.0;
+        }
+        else if (!slot.enabled)
+        {
+            borderCol = Vector(0.17, 0.17, 0.19); // Subtle ghost outline for hole
+            borderWidth = 1.0;
         }
         else if (slot.commandId > 0)
         {
@@ -313,16 +313,16 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
 
         Vector textCol;
-        if (!slot.enabled)
-            textCol = Vector(0.40, 0.42, 0.46);
-        else if (isSelected || isDragHover)
+        if (isSelected || isDragHover)
             textCol = Vector(1.0, 1.0, 1.0);
+        else if (!slot.enabled)
+            textCol = Vector(0.30, 0.32, 0.35); // Dim ghost text
         else if (slot.commandId > 0)
             textCol = slot.accentColor;
         else
             textCol = Vector(0.65, 0.68, 0.72);
 
-        if (hasIcon)
+        if (hasIcon && (slot.enabled || isSelected || isDragHover))
         {
             // Position icon slightly closer to inner ring, text slightly closer to outer ring
             Float rIcon = rMid - 13.0;
@@ -339,11 +339,14 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else
         {
-            // Center label inside sector
-            Float lx = cx + std::cos(midRad) * rMid;
-            Float ly = cy + std::sin(midRad) * rMid;
-            DrawSetTextCol(textCol, COLOR_TRANS);
-            DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
+            // Center label inside sector (or omit empty label if disabled and unselected)
+            if (slot.enabled || isSelected || isDragHover || slot.commandId > 0)
+            {
+                Float lx = cx + std::cos(midRad) * rMid;
+                Float ly = cy + std::sin(midRad) * rMid;
+                DrawSetTextCol(textCol, COLOR_TRANS);
+                DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
+            }
         }
     }
 
@@ -384,7 +387,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (!slot8.enabled)
     {
-        hubBgCol = Vector(0.07, 0.07, 0.08);
+        hubBgCol = Vector(0.12, 0.12, 0.13); // matches area background
         hubBorderCol = Vector(0.18, 0.18, 0.20);
         hubBorderWidth = 1.0;
     }
@@ -407,7 +410,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     DrawSetPen(hubBorderCol);
     DrawEllipseLine(Vector2d(cx, cy), Vector2d(deadzoneRadius, deadzoneRadius), hubBorderWidth);
 
-    if (slot8.commandId > 0)
+    if (slot8.commandId > 0 && (slot8.enabled || isSelected8 || isDragHover8))
     {
         IconData icon;
         if (slot8.GetIconBitmap(icon) && icon.bmp)
@@ -428,10 +431,18 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawLine((Int32)cx, (Int32)(cy - 3.5), (Int32)cx, (Int32)(cy + 3.5), 1.0);
 
         DrawSetTextCol(Vector(0.50, 0.54, 0.60), COLOR_TRANS);
-        DrawText("Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
+        DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
     }
 
-    // 6. Bottom hint
+    // 6. Context badge at top (if enabled for this menu)
+    if (prof->showTitle && prof->name.IsPopulated())
+    {
+        String badge = "["_s + prof->name + "]"_s;
+        DrawSetTextCol(Vector(0.50, 0.70, 0.90), COLOR_TRANS);
+        DrawText(badge, (Int32)cx, (Int32)(cy - hoverOuterR - 16.0), DRAWTEXT_HALIGN_CENTER);
+    }
+
+    // 7. Bottom hint
     DrawSetTextCol(Vector(0.52, 0.55, 0.60), COLOR_TRANS);
     DrawText("Click slot to inspect | Drag command here to assign"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
 }
