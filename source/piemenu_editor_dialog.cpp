@@ -849,6 +849,21 @@ Bool PieMenuEditorDialog::IsCapturingHotkey()
     return (s_activeDialog != nullptr && s_activeDialog->IsOpen() && s_activeDialog->m_waitingForHotkey);
 }
 
+Bool PieMenuEditorDialog::IsAnyFieldActive()
+{
+    if (!s_activeDialog || !s_activeDialog->IsOpen())
+        return false;
+
+    if (s_activeDialog->IsActive(IDC_PROFILE_NAME_EDIT) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_SLOT_TITLE) ||
+        s_activeDialog->IsActive(IDC_CMD_SEARCH))
+    {
+        return true;
+    }
+
+    return false;
+}
+
 void PieMenuEditorDialog::NotifyKeyCaptured(UInt32 vkCode)
 {
     if (!s_activeDialog)

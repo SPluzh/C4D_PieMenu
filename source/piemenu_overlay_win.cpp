@@ -46,20 +46,81 @@ static std::wstring ToWString(const maxon::String& str)
     return std::wstring(buf.data());
 }
 
-static Bool IsUserTypingText()
+static bool IsEditControlClass(const char* className)
 {
-    HWND hFocus = GetFocus();
-    if (!hFocus)
+    if (!className || !className[0])
         return false;
 
-    char className[64] = {};
-    GetClassNameA(hFocus, className, sizeof(className));
-    if (_stricmp(className, "Edit") == 0 ||
-        _stricmp(className, "RichEdit") == 0 ||
-        _stricmp(className, "RichEdit20W") == 0 ||
-        _stricmp(className, "RICHEDIT50W") == 0)
+    if (_stricmp(className, "Edit") == 0) return true;
+    if (_stricmp(className, "RichEdit") == 0) return true;
+    if (_stricmp(className, "RichEdit20W") == 0) return true;
+    if (_stricmp(className, "RichEdit20A") == 0) return true;
+    if (_stricmp(className, "RICHEDIT50W") == 0) return true;
+    if (_stricmp(className, "RICHEDIT60W") == 0) return true;
+    if (_stricmp(className, "MsftEdit_v4.0") == 0) return true;
+    if (_stricmp(className, "Scintilla") == 0) return true;
+
+    // Check if class name ends with "Edit" or "_Edit" (case-insensitive)
+    // Matches e.g. "C4D_Edit" but NOT "Editor" or "EditorWindow"
+    size_t len = strlen(className);
+    if (len >= 4)
     {
+        const char* suffix = className + len - 4;
+        if (_stricmp(suffix, "Edit") == 0)
+            return true;
+    }
+
+    return false;
+}
+
+static Bool IsUserTypingText()
+{
+    // 1. Direct check: Pie Menu Editor dialog fields
+    if (PieMenuEditorDialog::IsAnyFieldActive())
         return true;
+
+    HWND fg = GetForegroundWindow();
+    if (!fg)
+        return false;
+
+    DWORD pid = 0;
+    DWORD tid = GetWindowThreadProcessId(fg, &pid);
+    if (pid != GetCurrentProcessId())
+        return false;
+
+    // 2. Query Win32 GUI Thread Info for foreground thread in Cinema 4D
+    GUITHREADINFO gti = { sizeof(GUITHREADINFO) };
+    if (GetGUIThreadInfo(tid, &gti))
+    {
+        // 2a. Caret check: if caret is active and blinking on the focused window
+        if (gti.hwndCaret != NULL && gti.hwndFocus != NULL && gti.hwndCaret == gti.hwndFocus &&
+            (gti.flags & GUI_CARETBLINKING) != 0)
+        {
+            return true;
+        }
+
+        // 2b. Focused window on the GUI thread
+        if (gti.hwndFocus)
+        {
+            char className[128] = {};
+            if (GetClassNameA(gti.hwndFocus, className, sizeof(className)) > 0)
+            {
+                if (IsEditControlClass(className))
+                    return true;
+            }
+        }
+    }
+
+    // 3. Fallback: check calling thread's focus window
+    HWND hFocus = GetFocus();
+    if (hFocus)
+    {
+        char className[128] = {};
+        if (GetClassNameA(hFocus, className, sizeof(className)) > 0)
+        {
+            if (IsEditControlClass(className))
+                return true;
+        }
     }
 
     return false;
@@ -233,6 +294,9 @@ Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
 {
 #if defined(MAXON_TARGET_WINDOWS)
     if (!m_hwnd || m_active || !profile)
+        return false;
+
+    if (IsUserTypingText())
         return false;
 
     m_activeProfile = profile;
@@ -579,12 +643,8 @@ void PieMenuOverlay::CheckTrigger()
 
         if (triggered)
         {
-            // Only suppress single-character keys without Ctrl/Alt if typing in an edit field
-            if (!triggered->hotkey.ctrl && !triggered->hotkey.alt && triggered->hotkey.vkCode != 0)
-            {
-                if (IsUserTypingText())
-                    return;
-            }
+            if (IsUserTypingText())
+                return;
 
             OpenProfile(triggered);
         }

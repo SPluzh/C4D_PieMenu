@@ -74,6 +74,7 @@ public:
 
     static Bool IsCapturingHotkey();
     static void NotifyKeyCaptured(UInt32 vkCode);
+    static Bool IsAnyFieldActive();
 
     void AssignCommandToSelectedSlot(Int32 cmdId);
     void PopulateAllCommands();
