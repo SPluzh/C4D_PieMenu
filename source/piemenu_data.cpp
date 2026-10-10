@@ -1,4 +1,5 @@
 #include "piemenu_data.h"
+#include "piemenu_json.h"
 #include <cmath>
 #include "c4d_general.h"
 #include "c4d_libs/lib_iconcollection.h"
@@ -599,24 +600,192 @@ Filename PieProfileManager::GetConfigPath() const
     return path;
 }
 
-Bool PieProfileManager::LoadFromFile()
+static std::string C4DStringToStdString(const maxon::String& str)
 {
-    Filename path = GetConfigPath();
-    AutoAlloc<BaseFile> file;
-    if (!file || !file->Open(path, FILEOPEN::READ))
+    if (str.IsEmpty())
+        return "";
+    maxon::BaseArray<maxon::Char> arr = str.GetCString() iferr_ignore("GetCString");
+    if (arr.IsEmpty() || !arr.GetFirst())
+        return "";
+    return std::string(arr.GetFirst());
+}
+
+static maxon::String StdStringToC4DString(const std::string& str)
+{
+    if (str.empty())
+        return maxon::String();
+    return maxon::String(str.c_str());
+}
+
+static const Char* GetSlotPositionName(Int32 slotCount, Int32 index)
+{
+    if (index == 8) return "Center";
+    if (slotCount == 4)
     {
-        if (m_profiles.IsEmpty())
-            InitDefaults();
-        return false;
+        switch (index)
+        {
+            case 0: return "North";
+            case 1: return "East";
+            case 2: return "South";
+            case 3: return "West";
+            default: return "Unused";
+        }
     }
+    else
+    {
+        switch (index)
+        {
+            case 0: return "North";
+            case 1: return "NorthEast";
+            case 2: return "East";
+            case 3: return "SouthEast";
+            case 4: return "South";
+            case 5: return "SouthWest";
+            case 6: return "West";
+            case 7: return "NorthWest";
+            default: return "Unused";
+        }
+    }
+}
+
+static JsonValue ProfileToJson(const PieProfile& prof)
+{
+    JsonValue j = JsonValue::Object();
+    j.Set("name", C4DStringToStdString(prof.name));
+    j.Set("context", C4DStringToStdString(GetContextShortName(prof.context)));
+    j.Set("slotCount", (int64_t)prof.slotCount);
+    j.Set("showTitle", (bool)prof.showTitle);
+
+    // Hotkey
+    JsonValue jHk = JsonValue::Object();
+    jHk.Set("enabled", (bool)prof.hotkey.enabled);
+    jHk.Set("ctrl", (bool)prof.hotkey.ctrl);
+    jHk.Set("shift", (bool)prof.hotkey.shift);
+    jHk.Set("alt", (bool)prof.hotkey.alt);
+    jHk.Set("vkCode", (int64_t)prof.hotkey.vkCode);
+    jHk.Set("display", C4DStringToStdString(prof.hotkey.GetDisplayString()));
+    j.Set("hotkey", jHk);
+
+    // Slots
+    JsonValue jSlots = JsonValue::Array();
+    for (Int32 s = 0; s < 9; ++s)
+    {
+        const PieSlot& slot = prof.slots[s];
+        JsonValue jSlot = JsonValue::Object();
+        jSlot.Set("index", (int64_t)s);
+        jSlot.Set("position", GetSlotPositionName(prof.slotCount, s));
+        jSlot.Set("commandId", (int64_t)slot.commandId);
+        if (slot.commandId > 0)
+        {
+            String cname = GetCommandName(slot.commandId);
+            if (cname.IsPopulated())
+                jSlot.Set("commandName", C4DStringToStdString(cname));
+        }
+        if (slot.customLabel.IsPopulated())
+            jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
+
+        JsonValue jCol = JsonValue::Array();
+        jCol.Push(slot.accentColor.x);
+        jCol.Push(slot.accentColor.y);
+        jCol.Push(slot.accentColor.z);
+        jSlot.Set("accentColor", jCol);
+
+        jSlot.Set("enabled", (bool)slot.enabled);
+        jSlots.Push(jSlot);
+    }
+    j.Set("slots", jSlots);
+
+    return j;
+}
+
+static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
+{
+    if (!jProf.IsObject())
+        return false;
+
+    std::string nameStr = jProf.GetString("name", "Imported Menu");
+    outProf.name = StdStringToC4DString(nameStr);
+
+    std::string ctxStr = jProf.GetString("context", "Global");
+    if (ctxStr == "Polygons") outProf.context = PieContextMode::Polygons;
+    else if (ctxStr == "Edges") outProf.context = PieContextMode::Edges;
+    else if (ctxStr == "Points") outProf.context = PieContextMode::Points;
+    else if (ctxStr == "Objects") outProf.context = PieContextMode::Objects;
+    else if (ctxStr == "UV") outProf.context = PieContextMode::UV;
+    else if (jProf.Find("context") && jProf.Find("context")->IsNumber())
+        outProf.context = (PieContextMode)(Int32)jProf.GetInt("context", 0);
+    else
+        outProf.context = PieContextMode::Global;
+
+    int sc = (int)jProf.GetInt("slotCount", 8);
+    outProf.slotCount = (sc == 4) ? 4 : 8;
+    outProf.showTitle = jProf.GetBool("showTitle", true);
+
+    const JsonValue* jHk = jProf.GetObject("hotkey");
+    if (jHk)
+    {
+        outProf.hotkey.enabled = jHk->GetBool("enabled", true);
+        outProf.hotkey.ctrl = jHk->GetBool("ctrl", true);
+        outProf.hotkey.shift = jHk->GetBool("shift", true);
+        outProf.hotkey.alt = jHk->GetBool("alt", false);
+        outProf.hotkey.vkCode = (Int32)jHk->GetInt("vkCode", 0);
+    }
+    else
+    {
+        outProf.hotkey.enabled = true;
+        outProf.hotkey.ctrl = true;
+        outProf.hotkey.shift = true;
+        outProf.hotkey.alt = false;
+        outProf.hotkey.vkCode = 0;
+    }
+
+    for (int s = 0; s < 9; ++s)
+    {
+        outProf.slots[s].commandId = NOTOK;
+        outProf.slots[s].customLabel = ""_s;
+        outProf.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
+        outProf.slots[s].enabled = true;
+    }
+
+    const std::vector<JsonValue>* arrSlots = jProf.GetArray("slots");
+    if (arrSlots)
+    {
+        for (size_t i = 0; i < arrSlots->size(); ++i)
+        {
+            const JsonValue& jSlot = (*arrSlots)[i];
+            if (!jSlot.IsObject()) continue;
+            int idx = (int)jSlot.GetInt("index", (int64_t)i);
+            if (idx >= 0 && idx < 9)
+            {
+                outProf.slots[idx].commandId = (Int32)jSlot.GetInt("commandId", NOTOK);
+                std::string lbl = jSlot.GetString("customLabel", "");
+                outProf.slots[idx].customLabel = StdStringToC4DString(lbl);
+                outProf.slots[idx].enabled = jSlot.GetBool("enabled", true);
+
+                const std::vector<JsonValue>* arrCol = jSlot.GetArray("accentColor");
+                if (arrCol && arrCol->size() >= 3)
+                {
+                    outProf.slots[idx].accentColor = Vector(
+                        (*arrCol)[0].numVal,
+                        (*arrCol)[1].numVal,
+                        (*arrCol)[2].numVal
+                    );
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfile>& outProfiles, Float& outRadius, Float& outDeadzone, Bool& outUseCtrlShift, Int32& outTriggerKey)
+{
+    if (!file)
+        return false;
 
     Int32 firstVal = 0;
     if (!file->ReadInt32(&firstVal))
-    {
-        if (m_profiles.IsEmpty())
-            InitDefaults();
         return false;
-    }
 
     Int32 profileCount = 0;
     Int32 version = 1;
@@ -625,21 +794,13 @@ Bool PieProfileManager::LoadFromFile()
     {
         version = 3;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
-        {
-            if (m_profiles.IsEmpty())
-                InitDefaults();
             return false;
-        }
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V2)
     {
         version = 2;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
-        {
-            if (m_profiles.IsEmpty())
-                InitDefaults();
             return false;
-        }
     }
     else if (firstVal > 0 && firstVal <= 1000)
     {
@@ -648,12 +809,10 @@ Bool PieProfileManager::LoadFromFile()
     }
     else
     {
-        if (m_profiles.IsEmpty())
-            InitDefaults();
         return false;
     }
 
-    m_profiles.Reset();
+    outProfiles.Reset();
     for (Int32 p = 0; p < profileCount; ++p)
     {
         PieProfile prof;
@@ -681,7 +840,6 @@ Bool PieProfileManager::LoadFromFile()
         }
         else
         {
-            // Backward-compatibility: initialize with default Ctrl+Shift
             prof.hotkey.enabled = true;
             prof.hotkey.ctrl = true;
             prof.hotkey.shift = true;
@@ -698,19 +856,291 @@ Bool PieProfileManager::LoadFromFile()
             prof.showTitle = true;
         }
 
-        m_profiles.Append(prof) iferr_ignore("Append");
+        outProfiles.Append(prof) iferr_ignore("Append");
     }
 
-    file->ReadBool(&m_useCtrlShift);
-    file->ReadInt32(&m_triggerKey);
-    file->ReadFloat64(&m_radius);
-    file->ReadFloat64(&m_deadzone);
+    file->ReadBool(&outUseCtrlShift);
+    file->ReadInt32(&outTriggerKey);
+    file->ReadFloat64(&outRadius);
+    file->ReadFloat64(&outDeadzone);
+
+    return true;
+}
+
+Bool PieProfileManager::LoadFromFile()
+{
+    Filename path = GetConfigPath();
+    AutoAlloc<BaseFile> file;
+    if (!file || !file->Open(path, FILEOPEN::READ))
+    {
+        if (m_profiles.IsEmpty())
+            InitDefaults();
+        return false;
+    }
+
+    if (!ReadProfilesFromBinaryFile(file, m_profiles, m_radius, m_deadzone, m_useCtrlShift, m_triggerKey))
+    {
+        if (m_profiles.IsEmpty())
+            InitDefaults();
+        file->Close();
+        return false;
+    }
 
     file->Close();
 
     if (m_profiles.IsEmpty())
     {
         InitDefaults();
+    }
+
+    return true;
+}
+
+Bool PieProfileManager::ExportSettingsToFile(const Filename& path, Int32 singleProfileIndex) const
+{
+    JsonValue root = JsonValue::Object();
+    root.Set("generator", "Cinema 4D Pie Menu Plugin");
+    root.Set("version", (int64_t)1);
+
+    if (singleProfileIndex >= 0 && singleProfileIndex < (Int32)m_profiles.GetCount())
+    {
+        root.Set("profile", ProfileToJson(m_profiles[singleProfileIndex]));
+    }
+    else
+    {
+        JsonValue jSettings = JsonValue::Object();
+        jSettings.Set("radius", m_radius);
+        jSettings.Set("deadzone", m_deadzone);
+        root.Set("settings", jSettings);
+
+        JsonValue jProfiles = JsonValue::Array();
+        for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+        {
+            jProfiles.Push(ProfileToJson(m_profiles[i]));
+        }
+        root.Set("profiles", jProfiles);
+    }
+
+    std::string jsonStr = root.Dump(2);
+
+    AutoAlloc<BaseFile> file;
+    if (!file || !file->Open(path, FILEOPEN::WRITE))
+        return false;
+
+    Int64 written = file->WriteBytes(jsonStr.data(), (Int)jsonStr.size());
+    file->Close();
+
+    return (written == (Int64)jsonStr.size());
+}
+
+Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfileCount, maxon::String& outFirstName, Bool& outHasGlobalSettings) const
+{
+    outProfileCount = 0;
+    outFirstName = ""_s;
+    outHasGlobalSettings = false;
+
+    AutoAlloc<BaseFile> file;
+    if (!file || !file->Open(path, FILEOPEN::READ))
+        return false;
+
+    Int64 len = file->GetLength();
+    if (len <= 0 || len > 20 * 1024 * 1024)
+        return false;
+
+    // Check if binary DAT format
+    Int32 firstVal = 0;
+    if (file->ReadInt32(&firstVal))
+    {
+        if (firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        {
+            file->Seek(0, FILESEEK::START);
+            maxon::BaseArray<PieProfile> tempProfiles;
+            Float tempRadius = 85.0;
+            Float tempDeadzone = 26.0;
+            Bool tempCtrlShift = false;
+            Int32 tempTrigger = 'V';
+            if (ReadProfilesFromBinaryFile(file, tempProfiles, tempRadius, tempDeadzone, tempCtrlShift, tempTrigger))
+            {
+                outProfileCount = (Int32)tempProfiles.GetCount();
+                if (outProfileCount > 0)
+                    outFirstName = tempProfiles[0].name;
+                outHasGlobalSettings = true;
+                return true;
+            }
+        }
+    }
+
+    // Try JSON format
+    file->Seek(0, FILESEEK::START);
+    std::string content((size_t)len, '\0');
+    if (file->ReadBytes(&content[0], len) != len)
+        return false;
+
+    JsonValue root;
+    std::string err;
+    if (!JsonValue::Parse(content, root, err))
+        return false;
+
+    if (root.IsObject())
+    {
+        outHasGlobalSettings = root.Has("settings");
+        if (root.Has("profile"))
+        {
+            const JsonValue* p = root.GetObject("profile");
+            if (p)
+            {
+                outProfileCount = 1;
+                outFirstName = StdStringToC4DString(p->GetString("name", "Imported Menu"));
+                return true;
+            }
+        }
+        const std::vector<JsonValue>* arr = root.GetArray("profiles");
+        if (arr && !arr->empty())
+        {
+            outProfileCount = (Int32)arr->size();
+            outFirstName = StdStringToC4DString((*arr)[0].GetString("name", "Imported Menu"));
+            return true;
+        }
+
+        if (root.Has("slots"))
+        {
+            outProfileCount = 1;
+            outFirstName = StdStringToC4DString(root.GetString("name", "Imported Menu"));
+            return true;
+        }
+    }
+    else if (root.IsArray() && !root.arrVal.empty())
+    {
+        outProfileCount = (Int32)root.arrVal.size();
+        outFirstName = StdStringToC4DString(root.arrVal[0].GetString("name", "Imported Menu"));
+        return true;
+    }
+
+    return false;
+}
+
+Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replaceExisting, Int32& outImportedCount)
+{
+    outImportedCount = 0;
+
+    AutoAlloc<BaseFile> file;
+    if (!file || !file->Open(path, FILEOPEN::READ))
+        return false;
+
+    Int64 len = file->GetLength();
+    if (len <= 0 || len > 20 * 1024 * 1024)
+        return false;
+
+    maxon::BaseArray<PieProfile> parsedProfiles;
+    Float parsedRadius = m_radius;
+    Float parsedDeadzone = m_deadzone;
+    Bool hasParsedSettings = false;
+
+    // 1. Try binary DAT format
+    Int32 firstVal = 0;
+    if (file->ReadInt32(&firstVal))
+    {
+        if (firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        {
+            file->Seek(0, FILESEEK::START);
+            Bool dummyCtrlShift = false;
+            Int32 dummyTrigger = 'V';
+            if (ReadProfilesFromBinaryFile(file, parsedProfiles, parsedRadius, parsedDeadzone, dummyCtrlShift, dummyTrigger))
+            {
+                hasParsedSettings = true;
+            }
+        }
+    }
+
+    // 2. Try JSON format if not DAT
+    if (parsedProfiles.IsEmpty())
+    {
+        file->Seek(0, FILESEEK::START);
+        std::string content((size_t)len, '\0');
+        if (file->ReadBytes(&content[0], len) != len)
+            return false;
+
+        JsonValue root;
+        std::string err;
+        if (!JsonValue::Parse(content, root, err))
+            return false;
+
+        if (root.IsObject())
+        {
+            const JsonValue* jSettings = root.GetObject("settings");
+            if (jSettings)
+            {
+                parsedRadius = (Float)jSettings->GetNumber("radius", (double)m_radius);
+                parsedDeadzone = (Float)jSettings->GetNumber("deadzone", (double)m_deadzone);
+                hasParsedSettings = true;
+            }
+
+            if (root.Has("profile"))
+            {
+                const JsonValue* p = root.GetObject("profile");
+                if (p)
+                {
+                    PieProfile prof;
+                    if (ProfileFromJson(*p, prof))
+                        parsedProfiles.Append(prof) iferr_ignore("Append");
+                }
+            }
+            else if (root.Has("profiles"))
+            {
+                const std::vector<JsonValue>* arr = root.GetArray("profiles");
+                if (arr)
+                {
+                    for (size_t i = 0; i < arr->size(); ++i)
+                    {
+                        PieProfile prof;
+                        if (ProfileFromJson((*arr)[i], prof))
+                            parsedProfiles.Append(prof) iferr_ignore("Append");
+                    }
+                }
+            }
+            else if (root.Has("slots"))
+            {
+                PieProfile prof;
+                if (ProfileFromJson(root, prof))
+                    parsedProfiles.Append(prof) iferr_ignore("Append");
+            }
+        }
+        else if (root.IsArray())
+        {
+            for (size_t i = 0; i < root.arrVal.size(); ++i)
+            {
+                PieProfile prof;
+                if (ProfileFromJson(root.arrVal[i], prof))
+                    parsedProfiles.Append(prof) iferr_ignore("Append");
+            }
+        }
+    }
+
+    if (parsedProfiles.IsEmpty())
+        return false;
+
+    outImportedCount = (Int32)parsedProfiles.GetCount();
+
+    if (replaceExisting)
+    {
+        m_profiles.Reset();
+        for (Int32 i = 0; i < (Int32)parsedProfiles.GetCount(); ++i)
+        {
+            m_profiles.Append(parsedProfiles[i]) iferr_ignore("Append");
+        }
+        if (hasParsedSettings)
+        {
+            m_radius = parsedRadius;
+            m_deadzone = parsedDeadzone;
+        }
+    }
+    else
+    {
+        // Append
+        for (Int32 i = 0; i < (Int32)parsedProfiles.GetCount(); ++i)
+        {
+            m_profiles.Append(parsedProfiles[i]) iferr_ignore("Append");
+        }
     }
 
     return true;

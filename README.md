@@ -48,6 +48,9 @@
   - Adjustable Outer Radius and Deadzone Radius.
   - 4 or 8 radial slots.
   - Toggle *Show Menu Title* badge.
+- **Import & Export Settings**:
+  - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files.
+  - **Import Settings...**: Seamlessly load configuration from `.json` or binary `.dat` files with interactive prompt to either Replace all menus or Append/Merge new menus into your current configuration.
 - **Auto-Save & Defaults**:
   - Automatically saves all profile changes when closing the dialog or modifying settings.
   - Stored in Cinema 4D user preferences (`piemenu_profiles.dat`).

@@ -36,6 +36,8 @@ enum
     IDC_GLOBAL_RADIUS,
     IDC_GLOBAL_DEADZONE,
     IDC_BTN_SAVE,
+    IDC_BTN_EXPORT,
+    IDC_BTN_IMPORT,
     IDC_BTN_RESET,
     IDC_BTN_CLOSE,
 
@@ -472,9 +474,11 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupEnd(); // End Main 2-column layout
 
     // 3. Action buttons at bottom
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 5, 0, ""_s, 0);
     GroupBorderSpace(12, 6, 12, 10);
     AddButton(IDC_BTN_SAVE, BFH_SCALEFIT, 0, 0, "Save Configuration"_s);
+    AddButton(IDC_BTN_EXPORT, BFH_SCALEFIT, 0, 0, "Export Settings..."_s);
+    AddButton(IDC_BTN_IMPORT, BFH_SCALEFIT, 0, 0, "Import Settings..."_s);
     AddButton(IDC_BTN_RESET, BFH_SCALEFIT, 0, 0, "Reset to Defaults"_s);
     AddButton(IDC_BTN_CLOSE, BFH_SCALEFIT, 0, 0, "Close"_s);
     GroupEnd();
@@ -1196,6 +1200,119 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             ApplyInspectorChanges();
             if (mgr.SaveToFile())
                 GePrint("PieMenu: Successfully saved configuration to preferences."_s);
+            break;
+        }
+
+        case IDC_BTN_EXPORT:
+        {
+            ApplyInspectorChanges();
+            ApplyMenuSettingsChanges();
+            ApplyHotkeyChanges();
+            Float r = 85.0;
+            if (GetFloat(IDC_GLOBAL_RADIUS, r))
+                mgr.m_radius = r;
+            Float dz = 22.0;
+            if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
+                mgr.m_deadzone = dz;
+
+            Int32 profileCount = mgr.GetProfileCount();
+            Int32 exportTarget = NOTOK; // NOTOK means all
+
+            if (profileCount > 1)
+            {
+                Int32 curIdx = m_userArea.GetActiveProfileIndex();
+                PieProfile* curProf = mgr.GetProfile(curIdx);
+                String curName = curProf ? curProf->name : "active menu"_s;
+
+                String q = FormatString("Do you want to export ALL @ menu profiles?\n\n- Click 'Yes' to export ALL menus and global settings.\n- Click 'No' to export ONLY the active menu ('@')."_s, profileCount, curName);
+                Bool exportAll = QuestionDialog(q);
+                if (!exportAll)
+                {
+                    exportTarget = curIdx;
+                }
+            }
+
+            Filename fn;
+            if (exportTarget != NOTOK)
+            {
+                PieProfile* p = mgr.GetProfile(exportTarget);
+                String safeName = p ? p->name : "Menu"_s;
+                fn = Filename(FormatString("PieMenu_@.json"_s, safeName));
+            }
+            else
+            {
+                fn = Filename("PieMenu_Settings.json"_s);
+            }
+
+            if (!fn.FileSelect(FILESELECTTYPE::ANYTHING, FILESELECT::SAVE, "Export Pie Menu Settings"_s, "json"_s))
+                break;
+
+            if (fn.GetSuffix().IsEmpty())
+                fn.SetSuffix("json"_s);
+
+            if (mgr.ExportSettingsToFile(fn, exportTarget))
+            {
+                MessageDialog(FormatString("Pie menu settings successfully exported to:\n\n@"_s, fn.GetString()));
+            }
+            else
+            {
+                MessageDialog("Failed to export pie menu settings to file."_s);
+            }
+            break;
+        }
+
+        case IDC_BTN_IMPORT:
+        {
+            Filename fn;
+            if (!fn.FileSelect(FILESELECTTYPE::ANYTHING, FILESELECT::LOAD, "Import Pie Menu Settings"_s, "json"_s))
+                break;
+
+            Int32 countInFile = 0;
+            String firstName;
+            Bool hasSettings = false;
+
+            if (!mgr.InspectImportFile(fn, countInFile, firstName, hasSettings))
+            {
+                MessageDialog("The selected file is not a valid Pie Menu configuration or could not be read."_s);
+                break;
+            }
+
+            Bool replace = false;
+            if (countInFile > 1)
+            {
+                String q = FormatString("The file contains @ menu profiles.\n\nDo you want to REPLACE all your current menus?\n\n- Click 'Yes' to Replace all existing menus.\n- Click 'No' to Append/Add these menus to your list."_s, countInFile);
+                replace = QuestionDialog(q);
+            }
+            else
+            {
+                String q = FormatString("The file contains menu '@'.\n\nDo you want to REPLACE all your current menus with this menu, or APPEND it to your list?\n\n- Click 'Yes' to Replace all menus.\n- Click 'No' to Append to your list."_s, firstName);
+                replace = QuestionDialog(q);
+            }
+
+            Int32 importedCount = 0;
+            if (mgr.ImportSettingsFromFile(fn, replace, importedCount) && importedCount > 0)
+            {
+                mgr.SaveToFile();
+
+                // Refresh UI
+                RefreshProfileComboList();
+                Int32 targetIndex = replace ? 0 : (mgr.GetProfileCount() - importedCount);
+                if (targetIndex < 0) targetIndex = 0;
+                SelectProfile(targetIndex);
+
+                SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
+                SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
+
+                m_userArea.Redraw();
+                UpdateInspector();
+                UpdateHotkeyUI();
+
+                MessageDialog(FormatString("Successfully imported @ menu profile(s)!"_s, importedCount));
+            }
+            else
+            {
+                MessageDialog("Failed to import pie menu configuration from the file."_s);
+            }
             break;
         }
 

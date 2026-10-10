@@ -79,6 +79,11 @@ public:
     Bool LoadFromFile();
     Bool SaveToFile();
 
+    // Import and Export settings
+    Bool ExportSettingsToFile(const Filename& path, Int32 singleProfileIndex = NOTOK) const;
+    Bool ImportSettingsFromFile(const Filename& path, Bool replaceExisting, Int32& outImportedCount);
+    Bool InspectImportFile(const Filename& path, Int32& outProfileCount, maxon::String& outFirstName, Bool& outHasGlobalSettings) const;
+
     Int32 GetProfileCount() const;
     PieProfile* GetProfile(Int32 index);
     PieProfile* GetActiveProfileForDoc(BaseDocument* doc);
