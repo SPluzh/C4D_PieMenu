@@ -57,6 +57,7 @@ public:
     virtual Bool InitValues() override;
     virtual Bool Command(Int32 id, const BaseContainer& msg) override;
     virtual Int32 Message(const BaseContainer& msg, BaseContainer& result) override;
+    virtual void DestroyWindow() override;
 
     void UpdateInspector();
     void ApplyInspectorChanges();

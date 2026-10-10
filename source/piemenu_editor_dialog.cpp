@@ -324,6 +324,7 @@ PieMenuEditorDialog::PieMenuEditorDialog()
 
 Bool PieMenuEditorDialog::CreateLayout()
 {
+    s_activeDialog = this;
     SetTitle("Pie Menu Configuration"_s);
 
     // 1. Header / instructions
@@ -1204,6 +1205,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
         case IDC_BTN_SAVE:
         {
+            ApplyInspectorChanges();
             if (mgr.SaveToFile())
                 GePrint("PieMenu: Successfully saved configuration to preferences."_s);
             break;
@@ -1279,6 +1281,43 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
     }
 
     return GeDialog::Message(msg, result);
+}
+
+void PieMenuEditorDialog::DestroyWindow()
+{
+    // Apply any pending inspector edits before saving
+    ApplyInspectorChanges();
+
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (prof)
+    {
+        String newName;
+        if (GetString(IDC_PROFILE_NAME_EDIT, newName) && newName.IsPopulated())
+            prof->name = newName;
+    }
+
+    Float r = 85.0;
+    if (GetFloat(IDC_GLOBAL_RADIUS, r))
+        mgr.m_radius = r;
+
+    Float dz = 22.0;
+    if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
+        mgr.m_deadzone = dz;
+
+    Bool cs = true;
+    if (GetBool(IDC_GLOBAL_CTRLSHIFT, cs))
+        mgr.m_useCtrlShift = cs;
+
+    // Automatically save configuration on dialog close
+    if (mgr.SaveToFile())
+    {
+        GePrint("PieMenu: Configuration automatically saved on dialog close."_s);
+    }
+
+    m_waitingForHotkey = false;
+
+    GeDialog::DestroyWindow();
 }
 
 // ============================================================================
