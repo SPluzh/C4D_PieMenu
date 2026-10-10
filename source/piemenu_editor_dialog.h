@@ -61,10 +61,16 @@ public:
     void UpdateInspector();
     void ApplyInspectorChanges();
 
+    void UpdateMenuSettingsUI();
+    void ApplyMenuSettingsChanges();
+
     void UpdateHotkeyUI();
     void ApplyHotkeyChanges();
     void SetCapturedHotkey(Bool ctrl, Bool shift, Bool alt, Int32 vkCode);
     void CancelHotkeyCapture();
+
+    void RefreshProfileComboList();
+    void SelectProfile(Int32 index);
 
     static Bool IsCapturingHotkey();
     static void NotifyKeyCaptured(UInt32 vkCode);

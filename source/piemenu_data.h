@@ -36,8 +36,13 @@ enum class PieContextMode
     Polygons,
     Edges,
     Points,
-    Objects
+    Objects,
+    UV
 };
+
+maxon::String GetContextName(PieContextMode ctx);
+maxon::String GetContextShortName(PieContextMode ctx);
+PieContextMode GetContextModeForDoc(BaseDocument* doc);
 
 struct PieHotkey
 {
@@ -77,6 +82,12 @@ public:
     PieProfile* GetProfile(Int32 index);
     PieProfile* GetActiveProfileForDoc(BaseDocument* doc);
     Int32 GetActiveProfileIndex(BaseDocument* doc);
+
+    Int32 AddProfile(const maxon::String& name = maxon::String(), PieContextMode context = PieContextMode::Global, Int32 slotCount = 8);
+    Int32 DuplicateProfile(Int32 sourceIndex);
+    Bool DeleteProfile(Int32 index);
+    Bool RenameProfile(Int32 index, const maxon::String& newName);
+    Bool SetProfileContext(Int32 index, PieContextMode context);
 
     PieProfile* FindTriggeredProfile(BaseDocument* doc) const;
     Int32 FindTriggeredProfileIndex(BaseDocument* doc) const;

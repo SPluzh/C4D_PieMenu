@@ -262,7 +262,8 @@ Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
 
     if (m_activeProfile)
     {
-        StatusSetText(FormatString("Pie Menu [@]: Move cursor toward a slot to select"_s, m_activeProfile->name));
+        maxon::String ctxStr = GetContextShortName(m_activeProfile->context);
+        StatusSetText(FormatString("Pie Menu [@ - @]: Move cursor toward a slot to select (Esc to cancel)"_s, m_activeProfile->name, ctxStr));
     }
 
     return true;
@@ -527,8 +528,9 @@ void PieMenuOverlay::CheckTrigger()
     {
         PieProfileManager& mgr = PieProfileManager::Get();
         BaseDocument* doc = GetActiveDocument();
+        PieContextMode desired = GetContextModeForDoc(doc);
 
-        // Find profile matching current keys
+        // Find profiles matching current keys
         PieProfile* triggered = nullptr;
         maxon::BaseArray<PieProfile*> matched;
         for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
@@ -540,36 +542,37 @@ void PieMenuOverlay::CheckTrigger()
             }
         }
 
-        if (matched.GetCount() == 1)
+        if (!matched.IsEmpty())
         {
-            triggered = matched[0];
-        }
-        else if (matched.GetCount() > 1)
-        {
-            // Multiple profiles match this combination -> pick by active document mode
-            PieContextMode desired = PieContextMode::Global;
-            if (doc)
+            // 1. Exact context match (e.g. Polygons mode while in Polygons)
+            if (desired != PieContextMode::Global)
             {
-                Int32 mode = doc->GetMode();
-                if (mode == Mpolygons) desired = PieContextMode::Polygons;
-                else if (mode == Medges) desired = PieContextMode::Edges;
-                else if (mode == Mpoints) desired = PieContextMode::Points;
-                else if (mode == Mobject || mode == Mmodel) desired = PieContextMode::Objects;
-            }
-            for (PieProfile* p : matched)
-            {
-                if (p->context == desired)
+                for (PieProfile* p : matched)
                 {
-                    triggered = p;
-                    break;
+                    if (p->context == desired)
+                    {
+                        triggered = p;
+                        break;
+                    }
                 }
             }
+
+            // 2. Global context fallback
             if (!triggered)
-                triggered = matched[0];
+            {
+                for (PieProfile* p : matched)
+                {
+                    if (p->context == PieContextMode::Global)
+                    {
+                        triggered = p;
+                        break;
+                    }
+                }
+            }
         }
 
-        // Safety fallback: if Ctrl+Shift is held and no profile matched, open active profile
-        if (!triggered && m_ctrlDown && m_shiftDown && !m_altDown)
+        // Safety fallback: if Ctrl+Shift is held, and no profile matched via custom hotkey, and Ctrl+Shift trigger is enabled
+        if (!triggered && m_ctrlDown && m_shiftDown && !m_altDown && mgr.m_useCtrlShift)
         {
             triggered = mgr.GetActiveProfileForDoc(doc);
         }

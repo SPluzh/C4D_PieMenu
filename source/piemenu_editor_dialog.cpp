@@ -11,8 +11,19 @@ namespace cinema
 
 enum
 {
-    IDC_PROFILE_COMBO = 1000,
+    // Profile Management
+    IDC_GROUP_MENU_MANAGE = 1000,
+    IDC_PROFILE_COMBO,
+    IDC_BTN_NEW_PROFILE,
+    IDC_BTN_DUPLICATE_PROFILE,
+    IDC_BTN_DELETE_PROFILE,
+
+    // Active Profile Properties
+    IDC_GROUP_MENU_SETTINGS,
+    IDC_PROFILE_NAME_EDIT,
+    IDC_PROFILE_CONTEXT_COMBO,
     IDC_SLOTCOUNT_COMBO,
+
     IDC_USERAREA_PIE,
     IDC_GROUP_INSPECTOR,
     IDC_INSPECTOR_SLOT_TITLE,
@@ -370,17 +381,31 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, ""_s, 0);
     GroupSpace(0, 6);
 
-    // Profile selection bar
-    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
-    GroupBorderSpace(4, 0, 4, 4);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Active Profile:"_s, 0);
-    AddComboBox(IDC_PROFILE_COMBO, BFH_LEFT, 180, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
-    AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 90, 0);
+    // 1. Menu selection and management group
+    GroupBegin(IDC_GROUP_MENU_MANAGE, BFH_SCALEFIT, 5, 0, "Menu Management"_s, BORDER_GROUP_IN);
+    GroupBorderSpace(8, 6, 8, 6);
+    GroupSpace(6, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Active Menu:"_s, 0);
+    AddComboBox(IDC_PROFILE_COMBO, BFH_SCALEFIT, 200, 0);
+    AddButton(IDC_BTN_NEW_PROFILE, BFH_LEFT, 75, 0, "+ New Menu"_s);
+    AddButton(IDC_BTN_DUPLICATE_PROFILE, BFH_LEFT, 75, 0, "Duplicate"_s);
+    AddButton(IDC_BTN_DELETE_PROFILE, BFH_LEFT, 75, 0, "- Delete"_s);
     GroupEnd();
 
-    // Menu Hotkey settings group for the active profile
-    GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 8, 0, "Active Menu Hotkey"_s, BORDER_GROUP_IN);
+    // 2. Active Menu Properties group (Name, Context, Slots)
+    GroupBegin(IDC_GROUP_MENU_SETTINGS, BFH_SCALEFIT, 6, 0, "Menu Properties"_s, BORDER_GROUP_IN);
+    GroupBorderSpace(8, 6, 8, 6);
+    GroupSpace(6, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
+    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 130, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
+    AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_LEFT, 150, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
+    AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 85, 0);
+    GroupEnd();
+
+    // 3. Menu Hotkey settings group for the active profile
+    GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 8, 0, "Menu Hotkey (Trigger Shortcut)"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(6, 0);
 
@@ -643,25 +668,21 @@ Bool PieMenuEditorDialog::InitValues()
 {
     PieProfileManager& mgr = PieProfileManager::Get();
 
-    // Populate profiles combo with their current hotkeys
-    FreeChildren(IDC_PROFILE_COMBO);
-    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
-    {
-        PieProfile* prof = mgr.GetProfile(i);
-        if (prof)
-        {
-            String title = FormatString("@ [@]"_s, prof->name, prof->hotkey.GetDisplayString());
-            AddChild(IDC_PROFILE_COMBO, i, title);
-        }
-    }
-    SetInt32(IDC_PROFILE_COMBO, m_userArea.GetActiveProfileIndex());
-
     // Populate key selection combo
     FreeChildren(IDC_HOTKEY_KEY_COMBO);
     for (Int32 i = 0; i < s_availableKeyCount; ++i)
     {
         AddChild(IDC_HOTKEY_KEY_COMBO, i, String(s_availableKeys[i].name));
     }
+
+    // Populate context combo
+    FreeChildren(IDC_PROFILE_CONTEXT_COMBO);
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Global, GetContextName(PieContextMode::Global));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Polygons, GetContextName(PieContextMode::Polygons));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Edges, GetContextName(PieContextMode::Edges));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Points, GetContextName(PieContextMode::Points));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Objects, GetContextName(PieContextMode::Objects));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::UV, GetContextName(PieContextMode::UV));
 
     // Populate slot counts
     FreeChildren(IDC_SLOTCOUNT_COMBO);
@@ -692,9 +713,81 @@ Bool PieMenuEditorDialog::InitValues()
         m_treeGui->Refresh();
     }
 
-    UpdateInspector();
-    UpdateHotkeyUI();
+    RefreshProfileComboList();
+    SelectProfile(m_userArea.GetActiveProfileIndex());
     return true;
+}
+
+void PieMenuEditorDialog::UpdateMenuSettingsUI()
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    Int32 curIdx = m_userArea.GetActiveProfileIndex();
+    PieProfile* prof = mgr.GetProfile(curIdx);
+    if (!prof)
+        return;
+
+    SetString(IDC_PROFILE_NAME_EDIT, prof->name);
+    SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
+    SetInt32(IDC_SLOTCOUNT_COMBO, (prof->slotCount == 4) ? 0 : 1);
+}
+
+void PieMenuEditorDialog::ApplyMenuSettingsChanges()
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    Int32 curIdx = m_userArea.GetActiveProfileIndex();
+    PieProfile* prof = mgr.GetProfile(curIdx);
+    if (!prof)
+        return;
+
+    String name;
+    if (GetString(IDC_PROFILE_NAME_EDIT, name) && name.IsPopulated())
+        prof->name = name;
+
+    Int32 ctx = 0;
+    if (GetInt32(IDC_PROFILE_CONTEXT_COMBO, ctx))
+        prof->context = (PieContextMode)ctx;
+
+    Int32 sc = 0;
+    if (GetInt32(IDC_SLOTCOUNT_COMBO, sc))
+        prof->slotCount = (sc == 0) ? 4 : 8;
+
+    RefreshProfileComboList();
+    m_userArea.Redraw();
+    UpdateInspector();
+}
+
+void PieMenuEditorDialog::SelectProfile(Int32 index)
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    if (index < 0 || index >= mgr.GetProfileCount())
+        index = 0;
+
+    m_userArea.SetActiveProfileIndex(index);
+    SetInt32(IDC_PROFILE_COMBO, index);
+    UpdateMenuSettingsUI();
+    UpdateHotkeyUI();
+    UpdateInspector();
+    m_userArea.Redraw();
+}
+
+void PieMenuEditorDialog::RefreshProfileComboList()
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    Int32 curSel = m_userArea.GetActiveProfileIndex();
+    FreeChildren(IDC_PROFILE_COMBO);
+    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+    {
+        PieProfile* p = mgr.GetProfile(i);
+        if (p)
+        {
+            maxon::String ctxStr = GetContextShortName(p->context);
+            maxon::String hkStr = p->hotkey.GetDisplayString();
+            maxon::String title = FormatString("@ [@, @]"_s, p->name, ctxStr, hkStr);
+            AddChild(IDC_PROFILE_COMBO, i, title);
+        }
+    }
+    if (curSel >= 0 && curSel < mgr.GetProfileCount())
+        SetInt32(IDC_PROFILE_COMBO, curSel);
 }
 
 void PieMenuEditorDialog::UpdateHotkeyUI()
@@ -741,19 +834,7 @@ void PieMenuEditorDialog::ApplyHotkeyChanges()
     String displayStr = prof->hotkey.GetDisplayString();
     SetString(IDC_HOTKEY_PREVIEW_TEXT, FormatString("Assigned: [@]"_s, displayStr));
 
-    // Refresh profile dropdown items so shortcuts in labels stay in sync
-    Int32 curSel = m_userArea.GetActiveProfileIndex();
-    FreeChildren(IDC_PROFILE_COMBO);
-    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
-    {
-        PieProfile* p = mgr.GetProfile(i);
-        if (p)
-        {
-            String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
-            AddChild(IDC_PROFILE_COMBO, i, title);
-        }
-    }
-    SetInt32(IDC_PROFILE_COMBO, curSel);
+    RefreshProfileComboList();
 }
 
 Bool PieMenuEditorDialog::IsCapturingHotkey()
@@ -790,19 +871,7 @@ void PieMenuEditorDialog::SetCapturedHotkey(Bool ctrl, Bool shift, Bool alt, Int
     prof->hotkey.enabled = (ctrl || shift || alt || vkCode != 0);
 
     UpdateHotkeyUI();
-
-    Int32 curSel = m_userArea.GetActiveProfileIndex();
-    FreeChildren(IDC_PROFILE_COMBO);
-    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
-    {
-        PieProfile* p = mgr.GetProfile(i);
-        if (p)
-        {
-            String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
-            AddChild(IDC_PROFILE_COMBO, i, title);
-        }
-    }
-    SetInt32(IDC_PROFILE_COMBO, curSel);
+    RefreshProfileComboList();
 }
 
 void PieMenuEditorDialog::CancelHotkeyCapture()
@@ -894,9 +963,80 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             Int32 p = 0;
             if (GetInt32(IDC_PROFILE_COMBO, p))
             {
-                m_userArea.SetActiveProfileIndex(p);
-                UpdateInspector();
-                UpdateHotkeyUI();
+                SelectProfile(p);
+            }
+            break;
+        }
+
+        case IDC_BTN_NEW_PROFILE:
+        {
+            Int32 newIdx = mgr.AddProfile();
+            RefreshProfileComboList();
+            SelectProfile(newIdx);
+            break;
+        }
+
+        case IDC_BTN_DUPLICATE_PROFILE:
+        {
+            Int32 curIdx = m_userArea.GetActiveProfileIndex();
+            Int32 newIdx = mgr.DuplicateProfile(curIdx);
+            if (newIdx != NOTOK)
+            {
+                RefreshProfileComboList();
+                SelectProfile(newIdx);
+            }
+            break;
+        }
+
+        case IDC_BTN_DELETE_PROFILE:
+        {
+            if (mgr.GetProfileCount() <= 1)
+            {
+                MessageDialog("Cannot delete the only remaining pie menu."_s);
+                break;
+            }
+
+            Int32 curIdx = m_userArea.GetActiveProfileIndex();
+            PieProfile* prof = mgr.GetProfile(curIdx);
+            String name = prof ? prof->name : "this menu"_s;
+            if (QuestionDialog(FormatString("Are you sure you want to delete '@'?"_s, name)))
+            {
+                mgr.DeleteProfile(curIdx);
+                Int32 nextIdx = curIdx;
+                if (nextIdx >= mgr.GetProfileCount())
+                    nextIdx = mgr.GetProfileCount() - 1;
+                RefreshProfileComboList();
+                SelectProfile(nextIdx);
+            }
+            break;
+        }
+
+        case IDC_PROFILE_NAME_EDIT:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                String newName;
+                if (GetString(IDC_PROFILE_NAME_EDIT, newName) && newName.IsPopulated())
+                {
+                    prof->name = newName;
+                    RefreshProfileComboList();
+                }
+            }
+            break;
+        }
+
+        case IDC_PROFILE_CONTEXT_COMBO:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 ctx = 0;
+                if (GetInt32(IDC_PROFILE_CONTEXT_COMBO, ctx))
+                {
+                    prof->context = (PieContextMode)ctx;
+                    RefreshProfileComboList();
+                }
             }
             break;
         }
@@ -929,19 +1069,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 prof->hotkey.vkCode = 0;
                 prof->hotkey.enabled = false;
                 UpdateHotkeyUI();
-
-                Int32 curSel = m_userArea.GetActiveProfileIndex();
-                FreeChildren(IDC_PROFILE_COMBO);
-                for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
-                {
-                    PieProfile* p = mgr.GetProfile(i);
-                    if (p)
-                    {
-                        String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
-                        AddChild(IDC_PROFILE_COMBO, i, title);
-                    }
-                }
-                SetInt32(IDC_PROFILE_COMBO, curSel);
+                RefreshProfileComboList();
             }
             break;
         }
@@ -1094,6 +1222,20 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                 String q;
                 if (GetString(IDC_CMD_SEARCH, q))
                     FilterCommands(q);
+            }
+            else if (msg.GetInt32(BFM_ACTION_ID) == IDC_PROFILE_NAME_EDIT)
+            {
+                PieProfileManager& mgr = PieProfileManager::Get();
+                PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                if (prof)
+                {
+                    String newName;
+                    if (GetString(IDC_PROFILE_NAME_EDIT, newName) && newName.IsPopulated())
+                    {
+                        prof->name = newName;
+                        RefreshProfileComboList();
+                    }
+                }
             }
             break;
         }

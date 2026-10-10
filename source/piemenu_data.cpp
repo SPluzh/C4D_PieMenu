@@ -9,6 +9,54 @@ namespace cinema
 
 static const Int32 PIE_CONFIG_MAGIC_V2 = 0x50494532; // "PIE2"
 
+maxon::String GetContextName(PieContextMode ctx)
+{
+    switch (ctx)
+    {
+        case PieContextMode::Global:   return "Global (All Modes)"_s;
+        case PieContextMode::Polygons: return "Polygons Mode"_s;
+        case PieContextMode::Edges:    return "Edges Mode"_s;
+        case PieContextMode::Points:   return "Points Mode"_s;
+        case PieContextMode::Objects:  return "Objects / Model Mode"_s;
+        case PieContextMode::UV:       return "UV Edit Mode"_s;
+        default: return "Global"_s;
+    }
+}
+
+maxon::String GetContextShortName(PieContextMode ctx)
+{
+    switch (ctx)
+    {
+        case PieContextMode::Global:   return "Global"_s;
+        case PieContextMode::Polygons: return "Polygons"_s;
+        case PieContextMode::Edges:    return "Edges"_s;
+        case PieContextMode::Points:   return "Points"_s;
+        case PieContextMode::Objects:  return "Objects"_s;
+        case PieContextMode::UV:       return "UV"_s;
+        default: return "Global"_s;
+    }
+}
+
+PieContextMode GetContextModeForDoc(BaseDocument* doc)
+{
+    if (!doc)
+        return PieContextMode::Global;
+
+    Int32 mode = doc->GetMode();
+    if (mode == Mpolygons)
+        return PieContextMode::Polygons;
+    if (mode == Medges)
+        return PieContextMode::Edges;
+    if (mode == Mpoints)
+        return PieContextMode::Points;
+    if (mode == Mobject || mode == Mmodel)
+        return PieContextMode::Objects;
+    if (mode == Muvpoints || mode == Muvpolygons || mode == Muvedges)
+        return PieContextMode::UV;
+
+    return PieContextMode::Global;
+}
+
 static maxon::String GetKeyNameString(Int32 vkCode)
 {
     if (vkCode >= 'A' && vkCode <= 'Z')
@@ -575,14 +623,14 @@ Bool PieProfileManager::LoadFromFile()
     if (firstVal == PIE_CONFIG_MAGIC_V2)
     {
         isV2 = true;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 32)
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
         {
             if (m_profiles.IsEmpty())
                 InitDefaults();
             return false;
         }
     }
-    else if (firstVal > 0 && firstVal <= 32)
+    else if (firstVal > 0 && firstVal <= 1000)
     {
         isV2 = false;
         profileCount = firstVal;
@@ -619,16 +667,6 @@ Bool PieProfileManager::LoadFromFile()
             file->ReadBool(&prof.hotkey.shift);
             file->ReadBool(&prof.hotkey.alt);
             file->ReadInt32(&prof.hotkey.vkCode);
-
-            // Self-healing: if an unconfigured/disabled hotkey was read, restore to default Ctrl+Shift
-            if (!prof.hotkey.enabled || (!prof.hotkey.ctrl && !prof.hotkey.shift && !prof.hotkey.alt && prof.hotkey.vkCode == 0))
-            {
-                prof.hotkey.enabled = true;
-                prof.hotkey.ctrl = true;
-                prof.hotkey.shift = true;
-                prof.hotkey.alt = false;
-                prof.hotkey.vkCode = 0;
-            }
         }
         else
         {
@@ -716,20 +754,28 @@ PieProfile* PieProfileManager::GetProfile(Int32 index)
 
 Int32 PieProfileManager::GetActiveProfileIndex(BaseDocument* doc)
 {
-    if (!doc) return 0;
-    Int32 mode = doc->GetMode();
+    if (m_profiles.IsEmpty())
+        return 0;
 
-    PieContextMode desired = PieContextMode::Global;
-    if (mode == Mpolygons) desired = PieContextMode::Polygons;
-    else if (mode == Medges) desired = PieContextMode::Edges;
-    else if (mode == Mpoints) desired = PieContextMode::Points;
-    else if (mode == Mobject || mode == Mmodel) desired = PieContextMode::Objects;
+    PieContextMode desired = GetContextModeForDoc(doc);
 
+    // 1. Try exact context match
+    if (desired != PieContextMode::Global)
+    {
+        for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+        {
+            if (m_profiles[i].context == desired)
+                return i;
+        }
+    }
+
+    // 2. Fallback to Global context profile
     for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
     {
-        if (m_profiles[i].context == desired)
+        if (m_profiles[i].context == PieContextMode::Global)
             return i;
     }
+
     return 0; // Fallback to first profile
 }
 
@@ -737,6 +783,71 @@ PieProfile* PieProfileManager::GetActiveProfileForDoc(BaseDocument* doc)
 {
     Int32 idx = GetActiveProfileIndex(doc);
     return GetProfile(idx);
+}
+
+Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode context, Int32 slotCount)
+{
+    PieProfile p;
+    p.name = name.IsPopulated() ? name : FormatString("Menu @"_s, (Int32)m_profiles.GetCount() + 1);
+    p.context = context;
+    p.slotCount = (slotCount == 4) ? 4 : 8;
+    p.hotkey.enabled = false;
+    p.hotkey.ctrl = false;
+    p.hotkey.shift = false;
+    p.hotkey.alt = false;
+    p.hotkey.vkCode = 0;
+
+    for (Int32 s = 0; s < 9; ++s)
+    {
+        p.slots[s].commandId = NOTOK;
+        p.slots[s].customLabel = ""_s;
+        p.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
+        p.slots[s].enabled = true;
+    }
+
+    m_profiles.Append(p) iferr_ignore("Append");
+    return (Int32)m_profiles.GetCount() - 1;
+}
+
+Int32 PieProfileManager::DuplicateProfile(Int32 sourceIndex)
+{
+    if (sourceIndex < 0 || sourceIndex >= (Int32)m_profiles.GetCount())
+        return NOTOK;
+
+    PieProfile copy = m_profiles[sourceIndex];
+    copy.name = FormatString("@ (Copy)"_s, copy.name);
+    m_profiles.Append(copy) iferr_ignore("Append");
+    return (Int32)m_profiles.GetCount() - 1;
+}
+
+Bool PieProfileManager::DeleteProfile(Int32 index)
+{
+    if (m_profiles.GetCount() <= 1)
+        return false;
+
+    if (index < 0 || index >= (Int32)m_profiles.GetCount())
+        return false;
+
+    m_profiles.Erase(index) iferr_ignore("Erase");
+    return true;
+}
+
+Bool PieProfileManager::RenameProfile(Int32 index, const maxon::String& newName)
+{
+    if (index < 0 || index >= (Int32)m_profiles.GetCount() || !newName.IsPopulated())
+        return false;
+
+    m_profiles[index].name = newName;
+    return true;
+}
+
+Bool PieProfileManager::SetProfileContext(Int32 index, PieContextMode context)
+{
+    if (index < 0 || index >= (Int32)m_profiles.GetCount())
+        return false;
+
+    m_profiles[index].context = context;
+    return true;
 }
 
 PieProfile* PieProfileManager::FindTriggeredProfile(BaseDocument* doc) const
@@ -761,27 +872,27 @@ Int32 PieProfileManager::FindTriggeredProfileIndex(BaseDocument* doc) const
     if (matched.IsEmpty())
         return NOTOK;
 
-    if (matched.GetCount() == 1)
-        return matched[0];
+    PieContextMode desired = GetContextModeForDoc(doc);
 
-    // If multiple profiles share this shortcut, match current document mode
-    PieContextMode desired = PieContextMode::Global;
-    if (doc)
+    // 1. Search for exact context match
+    if (desired != PieContextMode::Global)
     {
-        Int32 mode = doc->GetMode();
-        if (mode == Mpolygons) desired = PieContextMode::Polygons;
-        else if (mode == Medges) desired = PieContextMode::Edges;
-        else if (mode == Mpoints) desired = PieContextMode::Points;
-        else if (mode == Mobject || mode == Mmodel) desired = PieContextMode::Objects;
+        for (Int32 idx : matched)
+        {
+            if (m_profiles[idx].context == desired)
+                return idx;
+        }
     }
 
+    // 2. Search for Global context match
     for (Int32 idx : matched)
     {
-        if (m_profiles[idx].context == desired)
+        if (m_profiles[idx].context == PieContextMode::Global)
             return idx;
     }
 
-    return matched[0];
+    // If all matched profiles have specific contexts that do NOT match the current mode, do not trigger
+    return NOTOK;
 }
 
 Bool PieProfileManager::IsProfileHotkeyHeld(const PieProfile* prof) const
