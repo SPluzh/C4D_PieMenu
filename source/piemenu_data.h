@@ -63,6 +63,7 @@ public:
     PieProfile* GetProfile(Int32 index);
     PieProfile* GetActiveProfileForDoc(BaseDocument* doc);
     Int32 GetActiveProfileIndex(BaseDocument* doc);
+    Bool  IsTriggerHeld() const;
 
     // Global settings
     Bool  m_useCtrlShift = true;

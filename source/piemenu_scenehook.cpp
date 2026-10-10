@@ -1,4 +1,5 @@
 #include "piemenu_scenehook.h"
+#include "piemenu_overlay_win.h"
 #include <cmath>
 #include "c4d_general.h"
 #include "windows_include.h"
@@ -18,104 +19,19 @@ Bool PieMenuSceneHook::Register()
     );
 }
 
-static Bool IsTriggerHeld()
-{
-    PieProfileManager& mgr = PieProfileManager::Get();
-    if (mgr.m_useCtrlShift)
-    {
-#if defined(MAXON_TARGET_WINDOWS)
-        SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
-        SHORT shiftState = GetAsyncKeyState(VK_SHIFT);
-        if ((ctrlState & 0x8000) && (shiftState & 0x8000))
-            return true;
-#endif
-        BaseContainer keyState;
-        if (GetInputState(BFM_INPUT_KEYBOARD, BFM_INPUT_QUALIFIER, keyState))
-        {
-            Int32 qual = keyState.GetInt32(BFM_INPUT_QUALIFIER);
-            if ((qual & QSHIFT) && (qual & QCTRL))
-                return true;
-        }
-        return false;
-    }
-    else if (mgr.m_triggerKey > 0)
-    {
-#if defined(MAXON_TARGET_WINDOWS)
-        if (mgr.m_triggerKey >= 'A' && mgr.m_triggerKey <= 'Z')
-        {
-            if (GetAsyncKeyState(mgr.m_triggerKey) & 0x8000)
-                return true;
-        }
-#endif
-        BaseContainer keyState;
-        if (GetInputState(BFM_INPUT_KEYBOARD, mgr.m_triggerKey, keyState))
-        {
-            if (keyState.GetInt32(BFM_INPUT_VALUE) != 0)
-                return true;
-        }
-    }
-    return false;
-}
-
 Bool PieMenuSceneHook::GetCursorInfo(BaseSceneHook* node, BaseDocument* doc, BaseDraw* bd, Float x, Float y, BaseContainer& bc)
 {
-    // BFM_CURSORINFO_REMOVE is sent by Cinema 4D when cursor info is being reset or redrawn.
-    // Crucially, we must NOT deactivate m_active here!
     if (bc.GetId() == BFM_CURSORINFO_REMOVE)
         return true;
 
     m_lastMouseX = x;
     m_lastMouseY = y;
 
-    PieProfileManager& mgr = PieProfileManager::Get();
-    Bool triggered = IsTriggerHeld();
-
-    if (triggered)
+    // Check trigger and delegate to transparent overlay
+    PieMenuOverlay::Get().CheckTrigger();
+    if (PieMenuOverlay::Get().IsActive())
     {
-        if (!m_active)
-        {
-            m_active = true;
-            m_originX = x;
-            m_originY = y;
-            m_currentX = x;
-            m_currentY = y;
-            m_hoveredSlot = NOTOK;
-            m_activeProfile = mgr.GetActiveProfileForDoc(doc);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-        }
-        else
-        {
-            if (x != m_currentX || y != m_currentY)
-            {
-                m_currentX = x;
-                m_currentY = y;
-                UpdateHover(x, y);
-                DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            }
-        }
-
         bc.SetInt32(RESULT_CURSOR, MOUSE_POINT_HAND);
-
-        if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
-        {
-            const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-            StatusSetText(FormatString("Pie Menu [@]: @ | Release Ctrl+Shift to execute"_s, m_activeProfile->name, slot.GetEffectiveTitle()));
-        }
-        else
-        {
-            StatusSetText(FormatString("Pie Menu [@]: Move cursor toward a slot to select"_s, m_activeProfile ? m_activeProfile->name : "Radial"_s));
-        }
-
-        return true;
-    }
-    else if (m_active && !triggered)
-    {
-        // Released! Commit selection
-        CommitSelection();
-        m_active = false;
-        m_hoveredSlot = NOTOK;
-        StatusSetText(""_s);
-        DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
         return true;
     }
 
@@ -124,74 +40,17 @@ Bool PieMenuSceneHook::GetCursorInfo(BaseSceneHook* node, BaseDocument* doc, Bas
 
 Bool PieMenuSceneHook::MouseInput(BaseSceneHook* node, BaseDocument* doc, BaseDraw* bd, EditorWindow* win, const BaseContainer& msg)
 {
-    if (m_active)
-    {
-        Int32 chn = msg.GetInt32(BFM_INPUT_CHANNEL);
-        if (chn == BFM_INPUT_MOUSELEFT)
-        {
-            CommitSelection();
-            m_active = false;
-            m_hoveredSlot = NOTOK;
-            StatusSetText(""_s);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            return true;
-        }
-        else if (chn == BFM_INPUT_MOUSERIGHT)
-        {
-            m_active = false;
-            m_hoveredSlot = NOTOK;
-            StatusSetText(""_s);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            return true;
-        }
-    }
+    if (PieMenuOverlay::Get().IsActive())
+        return true;
 
     return SceneHookData::MouseInput(node, doc, bd, win, msg);
 }
 
 Bool PieMenuSceneHook::KeyboardInput(BaseSceneHook* node, BaseDocument* doc, BaseDraw* bd, EditorWindow* win, const BaseContainer& msg)
 {
-    Int32 key = msg.GetData(BFM_INPUT_CHANNEL).GetInt32();
-
-    if (m_active)
-    {
-        if (key == KEY_ESC)
-        {
-            m_active = false;
-            m_hoveredSlot = NOTOK;
-            StatusSetText(""_s);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            return true;
-        }
-
-        if (!IsTriggerHeld())
-        {
-            CommitSelection();
-            m_active = false;
-            m_hoveredSlot = NOTOK;
-            StatusSetText(""_s);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            return true;
-        }
-
-        // Consume keyboard events while active
+    PieMenuOverlay::Get().CheckTrigger();
+    if (PieMenuOverlay::Get().IsActive())
         return true;
-    }
-    else
-    {
-        if (IsTriggerHeld())
-        {
-            m_active = true;
-            m_originX = m_lastMouseX;
-            m_originY = m_lastMouseY;
-            m_currentX = m_lastMouseX;
-            m_currentY = m_lastMouseY;
-            m_hoveredSlot = NOTOK;
-            m_activeProfile = PieProfileManager::Get().GetActiveProfileForDoc(doc);
-            DrawViews(DRAWFLAGS::ONLY_ACTIVE_VIEW | DRAWFLAGS::NO_THREAD | DRAWFLAGS::NO_ANIMATION);
-            return true;
-        }
-    }
 
     return SceneHookData::KeyboardInput(node, doc, bd, win, msg);
 }
@@ -246,24 +105,9 @@ void PieMenuSceneHook::CommitSelection()
 
 Bool PieMenuSceneHook::Draw(BaseSceneHook* node, BaseDocument* doc, BaseDraw* bd, BaseDrawHelp* bh, BaseThread* bt, SCENEHOOKDRAW flags)
 {
-    if (!bd || !m_active || !m_activeProfile)
+    if (PieMenuOverlay::Get().IsActive())
         return true;
 
-    // Draw in the standard drawing pass
-    if ((flags & SCENEHOOKDRAW::DRAW_PASS) == SCENEHOOKDRAW::NONE)
-        return true;
-
-    // Fail-safe: if trigger is physically no longer held, commit & close
-    if (!IsTriggerHeld())
-    {
-        CommitSelection();
-        m_active = false;
-        m_hoveredSlot = NOTOK;
-        StatusSetText(""_s);
-        return true;
-    }
-
-    DrawPieMenu(bd);
     return true;
 }
 

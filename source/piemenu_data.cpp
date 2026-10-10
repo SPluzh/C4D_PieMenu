@@ -2,6 +2,7 @@
 #include <cmath>
 #include "c4d_general.h"
 #include "c4d_libs/lib_iconcollection.h"
+#include "windows_include.h"
 
 namespace cinema
 {
@@ -487,6 +488,44 @@ PieProfile* PieProfileManager::GetActiveProfileForDoc(BaseDocument* doc)
 {
     Int32 idx = GetActiveProfileIndex(doc);
     return GetProfile(idx);
+}
+
+Bool PieProfileManager::IsTriggerHeld() const
+{
+    if (m_useCtrlShift)
+    {
+#if defined(MAXON_TARGET_WINDOWS)
+        SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
+        SHORT shiftState = GetAsyncKeyState(VK_SHIFT);
+        if ((ctrlState & 0x8000) && (shiftState & 0x8000))
+            return true;
+#endif
+        BaseContainer keyState;
+        if (GetInputState(BFM_INPUT_KEYBOARD, BFM_INPUT_QUALIFIER, keyState))
+        {
+            Int32 qual = keyState.GetInt32(BFM_INPUT_QUALIFIER);
+            if ((qual & QSHIFT) && (qual & QCTRL))
+                return true;
+        }
+        return false;
+    }
+    else if (m_triggerKey > 0)
+    {
+#if defined(MAXON_TARGET_WINDOWS)
+        if (m_triggerKey >= 'A' && m_triggerKey <= 'Z')
+        {
+            if (GetAsyncKeyState(m_triggerKey) & 0x8000)
+                return true;
+        }
+#endif
+        BaseContainer keyState;
+        if (GetInputState(BFM_INPUT_KEYBOARD, m_triggerKey, keyState))
+        {
+            if (keyState.GetInt32(BFM_INPUT_VALUE) != 0)
+                return true;
+        }
+    }
+    return false;
 }
 
 } // namespace cinema
