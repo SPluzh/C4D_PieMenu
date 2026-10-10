@@ -97,8 +97,8 @@ public:
     Bool  IsTriggerHeld() const;
 
     // Global settings
-    Bool  m_useCtrlShift = true;
-    Int32 m_triggerKey = 'V';
+    Bool  m_useCtrlShift = false; // Legacy (retained for binary file compatibility)
+    Int32 m_triggerKey = 'V';     // Legacy (retained for binary file compatibility)
     Float m_radius = 85.0;
     Float m_deadzone = 26.0;
 

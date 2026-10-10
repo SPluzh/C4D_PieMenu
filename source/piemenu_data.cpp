@@ -913,6 +913,10 @@ Int32 PieProfileManager::FindTriggeredProfileIndex(BaseDocument* doc) const
             return idx;
     }
 
+    // 3. Unique hotkey match: if only one profile matched the pressed shortcut, trigger it regardless of mode
+    if (matched.GetCount() == 1)
+        return matched[0];
+
     // If all matched profiles have specific contexts that do NOT match the current mode, do not trigger
     return NOTOK;
 }
@@ -924,43 +928,7 @@ Bool PieProfileManager::IsProfileHotkeyHeld(const PieProfile* prof) const
 
 Bool PieProfileManager::IsTriggerHeld() const
 {
-    if (m_useCtrlShift)
-    {
-#if defined(MAXON_TARGET_WINDOWS)
-        SHORT ctrlState = GetAsyncKeyState(VK_CONTROL);
-        SHORT shiftState = GetAsyncKeyState(VK_SHIFT);
-        if ((ctrlState & 0x8000) && (shiftState & 0x8000))
-            return true;
-#endif
-        BaseContainer keyState;
-        if (GetInputState(BFM_INPUT_KEYBOARD, BFM_INPUT_QUALIFIER, keyState))
-        {
-            Int32 qual = keyState.GetInt32(BFM_INPUT_QUALIFIER);
-            if ((qual & QSHIFT) && (qual & QCTRL))
-                return true;
-        }
-        return false;
-    }
-    else if (m_triggerKey > 0)
-    {
-        Int32 trigKey = m_triggerKey;
-        if (trigKey >= 'a' && trigKey <= 'z')
-            trigKey = toupper(trigKey);
-
-#if defined(MAXON_TARGET_WINDOWS)
-        if (trigKey >= 'A' && trigKey <= 'Z')
-        {
-            if (GetAsyncKeyState(trigKey) & 0x8000)
-                return true;
-        }
-#endif
-        BaseContainer keyState;
-        if (GetInputState(BFM_INPUT_KEYBOARD, trigKey, keyState))
-        {
-            if (keyState.GetInt32(BFM_INPUT_VALUE) != 0)
-                return true;
-        }
-    }
+    // Deprecated global check: trigger is now per-profile
     return false;
 }
 

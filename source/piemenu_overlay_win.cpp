@@ -416,15 +416,6 @@ void PieMenuOverlay::SyncKeysFromAsync()
         if ((GetAsyncKeyState(m_currentKeyDown) & 0x8000) == 0)
             m_currentKeyDown = 0;
     }
-
-    PieProfileManager& mgr = PieProfileManager::Get();
-    Int32 trigKey = mgr.m_triggerKey;
-    if (trigKey >= 'a' && trigKey <= 'z')
-        trigKey = toupper(trigKey);
-    if (trigKey > 0)
-    {
-        m_triggerKeyDown = (GetAsyncKeyState(trigKey) & 0x8000) != 0;
-    }
 #endif
 }
 
@@ -475,25 +466,7 @@ Bool PieMenuOverlay::IsTriggerHeld() const
         return IsHotkeyTriggered(m_activeProfile->hotkey);
     }
 
-    PieProfileManager& mgr = PieProfileManager::Get();
-    if (mgr.m_useCtrlShift)
-    {
-#if defined(MAXON_TARGET_WINDOWS)
-        bool cDown = m_ctrlDown || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
-        bool sDown = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
-        return cDown && sDown;
-#else
-        return mgr.IsTriggerHeld();
-#endif
-    }
-    else
-    {
-#if defined(MAXON_TARGET_WINDOWS)
-        return m_triggerKeyDown || ((GetAsyncKeyState(mgr.m_triggerKey) & 0x8000) != 0);
-#else
-        return mgr.IsTriggerHeld();
-#endif
-    }
+    return false;
 }
 
 void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
@@ -547,16 +520,6 @@ void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
             m_currentKeyDown = vkCode;
         else if (m_currentKeyDown == vkCode)
             m_currentKeyDown = 0;
-    }
-
-    PieProfileManager& mgr = PieProfileManager::Get();
-    Int32 trigKey = mgr.m_triggerKey;
-    if (trigKey >= 'a' && trigKey <= 'z')
-        trigKey = toupper(trigKey);
-
-    if (trigKey > 0 && vkCode == (UInt32)trigKey)
-    {
-        m_triggerKeyDown = isDown;
     }
 
     CheckTrigger();
@@ -633,12 +596,11 @@ void PieMenuOverlay::CheckTrigger()
                     }
                 }
             }
-        }
-
-        // Safety fallback: if Ctrl+Shift is held, and no profile matched via custom hotkey, and Ctrl+Shift trigger is enabled
-        if (!triggered && m_ctrlDown && m_shiftDown && !m_altDown && mgr.m_useCtrlShift)
-        {
-            triggered = mgr.GetActiveProfileForDoc(doc);
+            // 3. Unique hotkey match: if only one profile matched the pressed shortcut, trigger it regardless of mode
+            if (!triggered && matched.GetCount() == 1)
+            {
+                triggered = matched[0];
+            }
         }
 
         if (triggered)

@@ -33,7 +33,6 @@ enum
     IDC_INSPECTOR_CMD_NAME,
     IDC_INSPECTOR_COLOR_FIELD,
     IDC_INSPECTOR_CLEAR_SLOT,
-    IDC_GLOBAL_CTRLSHIFT,
     IDC_GLOBAL_RADIUS,
     IDC_GLOBAL_DEADZONE,
     IDC_BTN_SAVE,
@@ -460,9 +459,6 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBegin(0, BFH_SCALEFIT, 4, 0, "Global Behavior"_s, BORDER_GROUP_IN);
     GroupBorderSpace(10, 6, 10, 6);
 
-    AddCheckbox(IDC_GLOBAL_CTRLSHIFT, BFH_LEFT, 0, 0, "Hold Ctrl + Shift trigger"_s);
-    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
-
     AddStaticText(0, BFH_LEFT, 0, 0, "Menu Radius (px):"_s, 0);
     AddEditNumber(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 60, 0);
 
@@ -693,7 +689,6 @@ Bool PieMenuEditorDialog::InitValues()
     AddChild(IDC_SLOTCOUNT_COMBO, 1, "8 Slots"_s);
 
     // Global settings
-    SetBool(IDC_GLOBAL_CTRLSHIFT, mgr.m_useCtrlShift);
     SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
     SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
 
@@ -1179,13 +1174,6 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             break;
         }
 
-        case IDC_GLOBAL_CTRLSHIFT:
-        {
-            Bool cs = true;
-            if (GetBool(IDC_GLOBAL_CTRLSHIFT, cs))
-                mgr.m_useCtrlShift = cs;
-            break;
-        }
 
         case IDC_GLOBAL_RADIUS:
         {
@@ -1305,9 +1293,6 @@ void PieMenuEditorDialog::DestroyWindow()
     if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
         mgr.m_deadzone = dz;
 
-    Bool cs = true;
-    if (GetBool(IDC_GLOBAL_CTRLSHIFT, cs))
-        mgr.m_useCtrlShift = cs;
 
     // Automatically save configuration on dialog close
     if (mgr.SaveToFile())
