@@ -328,16 +328,9 @@ Bool PieMenuEditorDialog::CreateLayout()
     s_activeDialog = this;
     SetTitle("Pie Menu Configuration"_s);
 
-    // 1. Header / instructions
-    GroupBegin(0, BFH_SCALEFIT, 1, 0, ""_s, 0);
-    GroupBorderSpace(12, 10, 12, 4);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Cinema 4D Radial Pie Menu - Visual Configuration"_s, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Drag commands from the left list onto any slot, or double-click to assign."_s, 0);
-    GroupEnd();
-
-    // 2. Main 2-column layout (Left: Commands Library, Right: Pie Menu & Inspector)
+    // Main 2-column layout (Left: Commands Library, Right: Pie Menu & Inspector)
     GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 2, 0, ""_s, 0);
-    GroupBorderSpace(10, 4, 10, 4);
+    GroupBorderSpace(10, 8, 10, 4);
     GroupSpace(10, 0);
 
     // =============================================================
@@ -408,7 +401,20 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
     GroupEnd();
 
-    // 3. Menu Hotkey settings group for the active profile
+    // 3. Global Settings group (Radius & Deadzone)
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, "Global Behavior"_s, BORDER_GROUP_IN);
+    GroupBorderSpace(8, 6, 8, 6);
+    GroupSpace(6, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Menu Radius (px):"_s, 0);
+    AddEditNumber(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 60, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone (px):"_s, 0);
+    AddEditNumber(IDC_GLOBAL_DEADZONE, BFH_SCALEFIT, 60, 0);
+
+    GroupEnd();
+
+    // 4. Menu Hotkey settings group for the active profile
     GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 8, 0, "Menu Hotkey (Trigger Shortcut)"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(6, 0);
@@ -443,29 +449,19 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddStaticText(0, BFH_LEFT, 0, 0, "Enabled:"_s, 0);
     AddCheckbox(IDC_INSPECTOR_ENABLED, BFH_LEFT, 0, 0, "Slot Active in Menu"_s);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Command ID:"_s, 0);
-    AddEditNumber(IDC_INSPECTOR_CMD_ID, BFH_SCALEFIT, 0, 0);
-
     AddStaticText(0, BFH_LEFT, 0, 0, "Custom Label:"_s, 0);
-    AddEditText(IDC_INSPECTOR_CMD_NAME, BFH_SCALEFIT, 0, 0);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(6, 0);
+    AddEditText(IDC_INSPECTOR_CMD_NAME, BFH_SCALEFIT, 120, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Command ID:"_s, 0);
+    AddEditNumber(IDC_INSPECTOR_CMD_ID, BFH_LEFT, 75, 0);
+    GroupEnd();
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Accent Color:"_s, 0);
     AddColorField(IDC_INSPECTOR_COLOR_FIELD, BFH_LEFT, 60, 18);
 
     AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
     AddButton(IDC_INSPECTOR_CLEAR_SLOT, BFH_LEFT, 110, 0, "Clear Slot"_s);
-
-    GroupEnd();
-
-    // Global Settings group
-    GroupBegin(0, BFH_SCALEFIT, 4, 0, "Global Behavior"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(10, 6, 10, 6);
-
-    AddStaticText(0, BFH_LEFT, 0, 0, "Menu Radius (px):"_s, 0);
-    AddEditNumber(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 60, 0);
-
-    AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone (px):"_s, 0);
-    AddEditNumber(IDC_GLOBAL_DEADZONE, BFH_SCALEFIT, 60, 0);
 
     GroupEnd();
 
