@@ -22,6 +22,9 @@ public:
     void CancelAndClose();
 
     void CheckTrigger();
+    void OnKeyboardHook(UInt32 vkCode, UInt32 msg);
+    void SyncKeysFromAsync();
+    Bool IsTriggerHeld() const;
     void OnMouseMove(Int32 screenX, Int32 screenY);
 
     Int64 HandleMessage(void* hwnd, UInt32 msg, UInt64 wParam, Int64 lParam);
@@ -37,6 +40,10 @@ private:
     Bool        m_active = false;
     void*       m_hwnd = nullptr;
     UInt64      m_gdiToken = 0;
+
+    bool        m_ctrlDown = false;
+    bool        m_shiftDown = false;
+    bool        m_triggerKeyDown = false;
 
     Int32       m_originScreenX = 0;
     Int32       m_originScreenY = 0;

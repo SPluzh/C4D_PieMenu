@@ -28,6 +28,7 @@ Bool PieMenuSceneHook::GetCursorInfo(BaseSceneHook* node, BaseDocument* doc, Bas
     m_lastMouseY = y;
 
     // Check trigger and delegate to transparent overlay
+    PieMenuOverlay::Get().SyncKeysFromAsync();
     PieMenuOverlay::Get().CheckTrigger();
     if (PieMenuOverlay::Get().IsActive())
     {
@@ -48,6 +49,7 @@ Bool PieMenuSceneHook::MouseInput(BaseSceneHook* node, BaseDocument* doc, BaseDr
 
 Bool PieMenuSceneHook::KeyboardInput(BaseSceneHook* node, BaseDocument* doc, BaseDraw* bd, EditorWindow* win, const BaseContainer& msg)
 {
+    PieMenuOverlay::Get().SyncKeysFromAsync();
     PieMenuOverlay::Get().CheckTrigger();
     if (PieMenuOverlay::Get().IsActive())
         return true;

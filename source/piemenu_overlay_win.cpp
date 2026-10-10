@@ -56,14 +56,17 @@ static Bool IsUserTypingText()
     if (_stricmp(className, "Edit") == 0 ||
         _stricmp(className, "RichEdit") == 0 ||
         _stricmp(className, "RichEdit20W") == 0 ||
+        _stricmp(className, "RICHEDIT50W") == 0 ||
         strstr(className, "Edit") != nullptr)
     {
         return true;
     }
 
-    LRESULT dlgCode = SendMessageA(hFocus, WM_GETDLGCODE, 0, 0);
-    if (dlgCode & DLGC_WANTCHARS)
+    DWORD_PTR selRes = 0;
+    if (SendMessageTimeoutA(hFocus, EM_GETSEL, 0, 0, SMTO_ABORTIFHUNG, 10, &selRes) != 0)
+    {
         return true;
+    }
 
     return false;
 }
@@ -88,7 +91,7 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
                     return 1;
                 }
 
-                PieMenuOverlay::Get().CheckTrigger();
+                PieMenuOverlay::Get().OnKeyboardHook((UInt32)pkb->vkCode, (UInt32)wParam);
             }
         }
     }
@@ -229,15 +232,17 @@ Bool PieMenuOverlay::Open()
     int winX = m_originScreenX - OVERLAY_SIZE / 2;
     int winY = m_originScreenY - OVERLAY_SIZE / 2;
 
+    m_active = true;
+
+    // Render immediately so layered window has the first frame ready before display
+    RenderOverlay();
+
     SetWindowPos((HWND)m_hwnd, HWND_TOPMOST, winX, winY, OVERLAY_SIZE, OVERLAY_SIZE,
                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
     SetCapture((HWND)m_hwnd);
-    m_active = true;
 
     SetTimer((HWND)m_hwnd, TIMER_ID, 10, NULL);
-
-    RenderOverlay();
 
     if (m_activeProfile)
     {
@@ -261,6 +266,10 @@ void PieMenuOverlay::CommitAndClose()
     ShowWindow((HWND)m_hwnd, SW_HIDE);
     m_active = false;
     StatusSetText(""_s);
+
+    m_ctrlDown = false;
+    m_shiftDown = false;
+    m_triggerKeyDown = false;
 
     Int32 commandToCall = NOTOK;
     if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
@@ -292,9 +301,93 @@ void PieMenuOverlay::CancelAndClose()
     ReleaseCapture();
     ShowWindow((HWND)m_hwnd, SW_HIDE);
     m_active = false;
+    m_ctrlDown = false;
+    m_shiftDown = false;
+    m_triggerKeyDown = false;
     m_hoveredSlot = NOTOK;
     m_activeProfile = nullptr;
     StatusSetText(""_s);
+#endif
+}
+
+void PieMenuOverlay::SyncKeysFromAsync()
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    PieProfileManager& mgr = PieProfileManager::Get();
+    if (mgr.m_useCtrlShift)
+    {
+        m_ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+        m_shiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    }
+    else
+    {
+        Int32 trigKey = mgr.m_triggerKey;
+        if (trigKey >= 'a' && trigKey <= 'z')
+            trigKey = toupper(trigKey);
+        if (trigKey > 0)
+        {
+            m_triggerKeyDown = (GetAsyncKeyState(trigKey) & 0x8000) != 0;
+        }
+    }
+#endif
+}
+
+Bool PieMenuOverlay::IsTriggerHeld() const
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    if (mgr.m_useCtrlShift)
+    {
+#if defined(MAXON_TARGET_WINDOWS)
+        return m_ctrlDown && m_shiftDown;
+#else
+        return mgr.IsTriggerHeld();
+#endif
+    }
+    else
+    {
+#if defined(MAXON_TARGET_WINDOWS)
+        return m_triggerKeyDown;
+#else
+        return mgr.IsTriggerHeld();
+#endif
+    }
+}
+
+void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    bool isDown = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
+
+    if (vkCode == VK_CONTROL || vkCode == VK_LCONTROL || vkCode == VK_RCONTROL)
+    {
+        m_ctrlDown = isDown;
+        // If ctrl just went down, check if shift was already physically down
+        if (isDown && !m_shiftDown && (GetAsyncKeyState(VK_SHIFT) & 0x8000))
+        {
+            m_shiftDown = true;
+        }
+    }
+    else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT || vkCode == VK_RSHIFT)
+    {
+        m_shiftDown = isDown;
+        // If shift just went down, check if ctrl was already physically down
+        if (isDown && !m_ctrlDown && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+        {
+            m_ctrlDown = true;
+        }
+    }
+
+    PieProfileManager& mgr = PieProfileManager::Get();
+    Int32 trigKey = mgr.m_triggerKey;
+    if (trigKey >= 'a' && trigKey <= 'z')
+        trigKey = toupper(trigKey);
+
+    if (trigKey > 0 && vkCode == (UInt32)trigKey)
+    {
+        m_triggerKeyDown = isDown;
+    }
+
+    CheckTrigger();
 #endif
 }
 
@@ -305,10 +398,17 @@ void PieMenuOverlay::CheckTrigger()
     DWORD pid = 0;
     GetWindowThreadProcessId(fg, &pid);
     if (pid != GetCurrentProcessId())
+    {
+        if (m_active)
+            CancelAndClose();
+        m_ctrlDown = false;
+        m_shiftDown = false;
+        m_triggerKeyDown = false;
         return;
+    }
 
     PieProfileManager& mgr = PieProfileManager::Get();
-    Bool held = mgr.IsTriggerHeld();
+    Bool held = IsTriggerHeld();
 
     if (held)
     {
@@ -437,7 +537,9 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
         {
             if (wParam == TIMER_ID && m_active)
             {
-                if (!PieProfileManager::Get().IsTriggerHeld())
+                SyncKeysFromAsync();
+
+                if (!IsTriggerHeld())
                 {
                     CommitAndClose();
                     return 0;

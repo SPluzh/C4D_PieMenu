@@ -511,15 +511,19 @@ Bool PieProfileManager::IsTriggerHeld() const
     }
     else if (m_triggerKey > 0)
     {
+        Int32 trigKey = m_triggerKey;
+        if (trigKey >= 'a' && trigKey <= 'z')
+            trigKey = toupper(trigKey);
+
 #if defined(MAXON_TARGET_WINDOWS)
-        if (m_triggerKey >= 'A' && m_triggerKey <= 'Z')
+        if (trigKey >= 'A' && trigKey <= 'Z')
         {
-            if (GetAsyncKeyState(m_triggerKey) & 0x8000)
+            if (GetAsyncKeyState(trigKey) & 0x8000)
                 return true;
         }
 #endif
         BaseContainer keyState;
-        if (GetInputState(BFM_INPUT_KEYBOARD, m_triggerKey, keyState))
+        if (GetInputState(BFM_INPUT_KEYBOARD, trigKey, keyState))
         {
             if (keyState.GetInt32(BFM_INPUT_VALUE) != 0)
                 return true;
