@@ -1,93 +1,83 @@
-# C4D_PieMenu - Radial Marking Menu & Profile Editor for Cinema 4D
+# C4D_PieMenu — Radial Marking Menu & Profile Editor for Cinema 4D
 
-**C4D_PieMenu** — расширяемый плагин радиального меню (Pie Menu / Marking Menu) для Maxon Cinema 4D (поддерживаются 2026 и 2025). Плагин обеспечивает быстрый вызов любых инструментов и команд прямо под курсором мыши жестом **Press & Flick**, а также включает полноценный графический редактор профилей с поддержкой **Drag & Drop** из палитры «Customize Commands».
-
----
-
-## 🌟 Основные возможности
-
-### 1. Глобальный Viewport HUD (Pie Menu)
-- **Мгновенный вызов**: зажмите `Ctrl + Shift` (или настроенную клавишу) в любом месте вьюпорта — меню раскроется прямо под курсором мыши.
-- **Жест Press & Flick**: проведите мышь в направлении нужного сектора и отпустите клавиши — команда выполняется моментально, без лишних кликов.
-- **Клик-подтверждение**: меню также поддерживает выбор левым кликом мыши (LMB) или отмену правым кликом (RMB) / клавишей `Esc`.
-- **Премиальный круговой визуальный стиль**: стильные кольцевые сегменты (annular sectors), динамическое расширение при наведении (hover popout), светящаяся внутренняя полоса активного слота, центральный хаб мертвой зоны с прицелом/перекрестием, направляющая линия-указатель к курсору и информационный бейдж активного профиля.
-- **Центральный слот (Hub)**: центральная зона мертвой зоны (Deadzone) также может использоваться как отдельный слот (например, Undo или центрирование).
-
-### 2. Контекстная адаптация и неограниченное число меню
-- **Создание любого количества меню**: создавайте новые меню кнопкой **`+ New Menu`**, дублируйте существующие (**`Duplicate`**) или удаляйте ненужные (**`- Delete`**).
-- **Выбор контекста для каждого меню**:
-  - **Global**: доступно в любых режимах;
-  - **Polygons Mode**: режим полигонов;
-  - **Edges Mode**: режим рёбер;
-  - **Points Mode**: режим точек;
-  - **Objects / Model Mode**: режим объектов и моделирования;
-  - **UV Edit Mode**: режим редактирования UV-развертки.
-- **Индивидуальные горячие клавиши**: для каждого меню можно назначить собственную комбинацию модификаторов (`Ctrl`, `Shift`, `Alt`) и клавишу (включая интерактивный ввод через кнопку **`Press Key...`**).
-- **Умное разрешение конфликтов**: если одна и та же горячая клавиша назначена на разные меню, плагин автоматически выбирает наиболее специфичное меню для текущего контекста (с плавным откатом на `Global`).
-
-### 3. Графический конфигуратор (GeDialog + GeUserArea)
-- **Команда вызова**: меню *Extensions* -> *Pie Menu Configuration*.
-- **Встроенная библиотека команд**: удобный поиск по названиям и ID плагинов/инструментов Cinema 4D с поддержкой Drag & Drop или быстрого назначения по двойному клику.
-- **Интерактивный радиальный виджет**: наглядное отображение 4 или 8 слотов с их иконками, цветами и названиями.
-- **Инспектор слота**:
-  - Назначение любого Command ID вручную или перетаскиванием.
-  - Кастомное название (Custom Label).
-  - Настройка индивидуального цвета подсветки (Accent Color).
-  - Включение/отключение слота.
-  - Очистка слота кнопкой *Clear Slot*.
-- **Глобальные параметры**:
-  - Радиус раскрытия меню (Menu Radius).
-  - Радиус мертвой зоны (Deadzone).
-  - Резервный переключатель триггера `Ctrl + Shift`.
-- **Сохранение и сброс**: настройки сохраняются в файл `piemenu_profiles.dat` в директории пользовательских настроек Cinema 4D. Кнопка *Reset to Defaults* сбрасывает профили на заводские.
+**C4D_PieMenu** is a fast, highly customizable radial marking menu (pie menu) plugin for Maxon Cinema 4D (supporting Cinema 4D 2025 and 2026). It brings rapid gesture-based tool and command execution directly under your mouse cursor (**Press & Flick**), alongside an interactive graphical profile editor with full **Drag & Drop** command assignment.
 
 ---
 
-## ⌨️ Управление и горячие клавиши
+## 🌟 Key Features
 
-| Жест / Клавиша | Действие |
+### 1. Zero-Latency Viewport HUD & Marking Menu
+- **Hardware-Accelerated Overlay**: Uses a dedicated transparent double-buffered Win32 overlay with GDI+ anti-aliasing, ensuring smooth, instantaneous opening with zero viewport stutter.
+- **Press & Flick Gesture**: Press and hold your designated menu hotkey, flick the mouse toward the desired slice, and release the key — the command fires instantly without requiring extra clicks.
+- **Click Confirmation & Escape**: Supports traditional left-click (LMB) confirmation or right-click (RMB) / `Esc` to dismiss without executing.
+- **Smart Input Detection**: Automatically pauses menu activation when typing in text fields, numeric attributes, console inputs, or renaming objects in Cinema 4D to prevent accidental triggers.
+- **Center Hub Slot**: The central deadzone doubles as a dedicated hub slot (e.g. for Undo, Reset, or Deselect).
+- **Modern Annular Aesthetics**:
+  - Smooth annular arc segments with hover popout expansion.
+  - Directional laser pointer guideline connecting the hub to the cursor.
+  - Prominent glowing accent highlights for the hovered slot.
+  - Deadzone crosshair reticle.
+  - Optional profile title badge above the menu.
+  - **Inactive Slots as Gaps**: Inactive or unassigned slots can appear as clean gaps, keeping your most-used commands clearly separated and easy to hit.
+
+### 2. Unlimited Context-Aware Profiles
+- **Create Unlimited Menus**: Add as many custom pie menus as you need using the **`+ New Menu`**, **`Duplicate`**, and **`- Delete`** buttons.
+- **Context-Sensitive Triggering**:
+  - **Global**: Accessible across all modes and tools.
+  - **Polygons Mode**: Active when working in polygon component mode.
+  - **Edges Mode**: Active when working in edge component mode.
+  - **Points Mode**: Active when working in point component mode.
+  - **Objects / Model Mode**: Active in standard object or model mode.
+  - **UV Edit Mode**: Active within UV editing workflows.
+- **Individual Per-Menu Hotkeys**: Assign any key combination to each menu:
+  - Modifiers: `Ctrl`, `Shift`, `Alt`.
+  - Keys: Any standard key (e.g., `V`, `Tab`, `C`, `Space`, function keys, numbers, etc.) with interactive key recording via the **`Press Key...`** button.
+- **Smart Conflict Resolution**: If multiple menus share the same hotkey, the plugin dynamically activates the menu that best matches your current document editing context, seamlessly falling back to Global if no mode-specific menu matches.
+
+### 3. Visual Configuration Dialog (Extensions -> Pie Menu Configuration)
+- **Built-in Command Palette & Search**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name or command ID.
+- **Drag & Drop Assignment**: Drag commands directly from the command browser onto radial slots or the slot inspector. Double-clicking a command assigns it to the active slot.
+- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, and gap distribution.
+- **Detailed Slot Inspector**:
+  - Custom Command ID or name.
+  - Custom Label overrides.
+  - Custom Accent Color picker per slot.
+  - Enable / Disable slot toggle.
+  - One-click *Clear Slot*.
+- **Display & Sizing Controls**:
+  - Adjustable Outer Radius and Deadzone Radius.
+  - 4 or 8 radial slots.
+  - Toggle *Show Menu Title* badge.
+- **Auto-Save & Defaults**:
+  - Automatically saves all profile changes when closing the dialog or modifying settings.
+  - Stored in Cinema 4D user preferences (`piemenu_profiles.dat`).
+  - *Reset to Defaults* button to restore default presets at any time.
+
+---
+
+## ⌨️ Controls & Gestures
+
+| Action / Gesture | Description |
 |---|---|
-| **Удержание `Ctrl + Shift`** | Открыть радиальное меню под курсором мыши |
-| **Движение мыши** | Наведение на сектор меню (с подсветкой активного слота) |
-| **Отпускание `Ctrl + Shift`** | Выполнить выбранную команду (Press & Flick) |
-| **LMB (клик)** | Выполнить выбранную команду |
-| **RMB или `Esc`** | Отменить и закрыть меню без выполнения |
+| **Hold Configured Hotkey** | Instantly opens the radial pie menu under the cursor |
+| **Move Mouse** | Highlights the targeted slot with popout and laser pointer |
+| **Release Hotkey** | Executes the active slot command immediately (**Press & Flick**) |
+| **LMB Click** | Executes the highlighted slot command |
+| **RMB Click or `Esc`** | Cancels and closes the menu without executing |
 
 ---
 
-## 🛠️ Сборка и установка
+## 📦 Installation
 
-### Требования
-- Visual Studio 2022 (MSVC v143)
-- CMake 3.20+
-- Cinema 4D C++ SDK (2025 или 2026)
-
-### Сборка
-- Для C4D 2026: запустите `build_2026.bat` или выполните `.\build_2026.ps1`
-- Для C4D 2025: запустите `build_2025.bat` или выполните `.\build_2025.ps1`
-
-### Деплой
-- Для C4D 2026: запустите `deploy_2026.bat` (копирует плагин в сетевую папку `\\vmware-host\Shared Folders\plugins\C4D_PieMenu`)
-- Для C4D 2025: запустите `deploy_2025.bat`
-
----
-
-## 📁 Структура проекта
-
-```text
-C4D_PieMenu/
-├── project/
-│   └── projectdefinition.txt        # Модуль Cinema 4D (net.maxonexample.c4dpiemenu)
-├── source/
-│   ├── piemenu_ids.h                # Plugin IDs (SceneHook=1067833, Dialog=1067834)
-│   ├── piemenu_data.h / .cpp        # Модели PieSlot, PieProfile, PieProfileManager
-│   ├── piemenu_scenehook.h / .cpp   # SceneHookData: перехват ввода и 2D HUD вьюпорта
-│   ├── piemenu_editor_area.h / .cpp # GeUserArea: радиальный виджет с Drag & Drop
-│   ├── piemenu_editor_dialog.h / .cpp # GeDialog: окно настроек профилей
-│   └── main.cpp                     # Регистрация плагинов
-├── build_2026.bat / .ps1
-├── build_2025.bat / .ps1
-├── deploy_2026.bat / .ps1
-├── deploy_2025.bat / .ps1
-└── README.md
-```
+1. Download or extract the release archive (`C4D_PieMenu_v<version>.zip`).
+2. Copy the `C4D_PieMenu` folder corresponding to your Cinema 4D version (`2025` or `2026`) into your Cinema 4D plugins directory:
+   - **User Plugins folder (Recommended)**:
+     ```text
+     %APPDATA%\Maxon\Maxon Cinema 4D <Version>_<Hash>\plugins\C4D_PieMenu
+     ```
+   - **Application Plugins folder**:
+     ```text
+     <Cinema 4D Installation Directory>\plugins\C4D_PieMenu
+     ```
+3. Launch or restart Cinema 4D.
+4. Access the configurator via the main menu: **Extensions** -> **Pie Menu Configuration**.
