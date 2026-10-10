@@ -456,6 +456,12 @@ Bool PieMenuEditorArea::InputEvent(const BaseContainer& msg)
             BaseContainer action(BFM_ACTION);
             action.SetInt32(BFM_ACTION_ID, GetId());
             SendParentMessage(action);
+
+            PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
+            if (prof && prof->slots[slot].commandId > 0)
+            {
+                HandleMouseDrag(msg, DRAGTYPE_COMMAND, reinterpret_cast<void*>(static_cast<uintptr_t>(prof->slots[slot].commandId)), 0);
+            }
             return true;
         }
     }

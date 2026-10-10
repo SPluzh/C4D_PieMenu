@@ -1,5 +1,9 @@
 #include "piemenu_editor_dialog.h"
 #include "c4d_general.h"
+#include "c4d_baseplugin.h"
+#include <algorithm>
+#include <functional>
+#include <unordered_set>
 
 namespace cinema
 {
@@ -21,7 +25,14 @@ enum
     IDC_GLOBAL_DEADZONE,
     IDC_BTN_SAVE,
     IDC_BTN_RESET,
-    IDC_BTN_CLOSE
+    IDC_BTN_CLOSE,
+
+    // Left commands library panel
+    IDC_GROUP_CMD_PANEL,
+    IDC_CMD_SEARCH,
+    IDC_CMD_COUNT,
+    IDC_CMD_BTN_ASSIGN,
+    IDC_CMD_TREEVIEW
 };
 
 static const Char* s_slotNames8[9] = {
@@ -45,6 +56,188 @@ static const Char* s_slotNames4[9] = {
     "Center (Hub)"
 };
 
+// ============================================================================
+// COMMAND LIST TREE VIEW FUNCTIONS IMPLEMENTATION
+// ============================================================================
+
+void* CommandListTreeView::GetFirst(void* root, void* userdata)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    if (!dlg)
+        return nullptr;
+    const maxon::BaseArray<CommandItem*>& list = dlg->GetFilteredCommands();
+    return (list.GetCount() > 0) ? list[0] : nullptr;
+}
+
+void* CommandListTreeView::GetDown(void* root, void* userdata, void* obj)
+{
+    return nullptr;
+}
+
+void* CommandListTreeView::GetNext(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    if (!dlg || !item)
+        return nullptr;
+
+    const maxon::BaseArray<CommandItem*>& list = dlg->GetFilteredCommands();
+    Int32 nextIdx = item->filterIndex + 1;
+    if (nextIdx >= 0 && nextIdx < (Int32)list.GetCount())
+        return list[nextIdx];
+
+    return nullptr;
+}
+
+void* CommandListTreeView::GetPred(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    if (!dlg || !item)
+        return nullptr;
+
+    const maxon::BaseArray<CommandItem*>& list = dlg->GetFilteredCommands();
+    Int32 predIdx = item->filterIndex - 1;
+    if (predIdx >= 0 && predIdx < (Int32)list.GetCount())
+        return list[predIdx];
+
+    return nullptr;
+}
+
+Bool CommandListTreeView::IsSelected(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    return dlg ? (dlg->GetSelectedCommand() == obj) : false;
+}
+
+void CommandListTreeView::Select(void* root, void* userdata, void* obj, Int32 mode)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    if (!dlg)
+        return;
+
+    if (mode == SELECTION_NEW || mode == SELECTION_ADD)
+    {
+        dlg->SetSelectedCommand(static_cast<CommandItem*>(obj));
+    }
+    else if (mode == SELECTION_SUB)
+    {
+        if (dlg->GetSelectedCommand() == obj)
+            dlg->SetSelectedCommand(nullptr);
+    }
+}
+
+Bool CommandListTreeView::IsOpened(void* root, void* userdata, void* obj)
+{
+    return false;
+}
+
+String CommandListTreeView::GetName(void* root, void* userdata, void* obj)
+{
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    return item ? item->name : String();
+}
+
+Int CommandListTreeView::GetId(void* root, void* userdata, void* obj)
+{
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    return item ? (Int)item->id : 0;
+}
+
+Int32 CommandListTreeView::GetDragType(void* root, void* userdata, void* obj)
+{
+    return DRAGTYPE_COMMAND;
+}
+
+Int32 CommandListTreeView::DragStart(void* root, void* userdata, void* obj)
+{
+    return TREEVIEW_DRAGSTART_ALLOW | TREEVIEW_DRAGSTART_SELECT;
+}
+
+void CommandListTreeView::GenerateDragData(void* root, void* userdata, void* obj, void** dragdata)
+{
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    if (item && dragdata)
+    {
+        *dragdata = reinterpret_cast<void*>(static_cast<uintptr_t>(item->id));
+    }
+}
+
+Int32 CommandListTreeView::AcceptDragObject(void* root, void* userdata, void* obj, Int32 dragtype, void* dragobject, Bool& bAllowCopy)
+{
+    return 0;
+}
+
+Int32 CommandListTreeView::GetColumnWidth(void* root, void* userdata, void* obj, Int32 col, GeUserArea* area)
+{
+    if (col == 'icon')
+        return 24;
+    if (col == 'cmdi')
+        return 65;
+    return LV_COLUMN_WIDTH_FIT;
+}
+
+Int32 CommandListTreeView::GetHeaderColumnWidth(void* root, void* userdata, Int32 col, GeUserArea* area)
+{
+    if (col == 'icon')
+        return 24;
+    if (col == 'cmdi')
+        return 65;
+    return LV_COLUMN_WIDTH_FIT;
+}
+
+Int32 CommandListTreeView::GetLineHeight(void* root, void* userdata, void* obj, Int32 col, GeUserArea* area)
+{
+    return 22;
+}
+
+void CommandListTreeView::DrawCell(void* root, void* userdata, void* obj, Int32 col, DrawInfo* drawinfo, const GeData& bgColor)
+{
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    if (!item || !drawinfo || !drawinfo->frame)
+        return;
+
+    if (col == 'icon')
+    {
+        if (item->hasIcon && item->icon.bmp)
+        {
+            const Int32 sz = 16;
+            Int32 ix = drawinfo->xpos + (drawinfo->width - sz) / 2;
+            Int32 iy = drawinfo->ypos + (drawinfo->height - sz) / 2;
+            Int32 drawflags = BMP_ALLOWALPHA | BMP_NORMALSCALED;
+            if (item->icon.flags & ICONDATAFLAGS::APPLYCOLORPROFILE)
+                drawflags |= BMP_APPLY_COLORPROFILE;
+            drawinfo->frame->DrawBitmap(item->icon.bmp, ix, iy, sz, sz,
+                item->icon.x, item->icon.y, item->icon.w, item->icon.h,
+                drawflags);
+        }
+    }
+    else if (col == 'cmdi')
+    {
+        String idStr = String::IntToString(item->id);
+        drawinfo->frame->DrawSetTextCol(Vector(0.50, 0.53, 0.58), COLOR_TRANS);
+        Int32 th = drawinfo->frame->DrawGetFontHeight();
+        Int32 ty = drawinfo->ypos + (drawinfo->height - th) / 2;
+        drawinfo->frame->DrawText(idStr, drawinfo->xpos + 4, ty);
+    }
+}
+
+Int32 CommandListTreeView::DoubleClick(void* root, void* userdata, void* obj, Int32 col, MouseInfo* mouseinfo)
+{
+    CommandItem* item = static_cast<CommandItem*>(obj);
+    if (item && userdata)
+    {
+        PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+        dlg->AssignCommandToSelectedSlot(item->id);
+        return true;
+    }
+    return false;
+}
+
+// ============================================================================
+// PIE MENU EDITOR DIALOG IMPLEMENTATION
+// ============================================================================
+
 PieMenuEditorDialog::PieMenuEditorDialog()
 {
 }
@@ -55,30 +248,79 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     // 1. Header / instructions
     GroupBegin(0, BFH_SCALEFIT, 1, 0, ""_s, 0);
-    GroupBorderSpace(12, 12, 12, 6);
+    GroupBorderSpace(12, 10, 12, 4);
     AddStaticText(0, BFH_LEFT, 0, 0, "Cinema 4D Radial Pie Menu - Visual Configuration"_s, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Drag commands from 'Customize Commands' onto any slot, or edit properties below."_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Drag commands from the left list onto any slot, or double-click to assign."_s, 0);
     GroupEnd();
 
-    // 2. Profile selection bar
+    // 2. Main 2-column layout (Left: Commands Library, Right: Pie Menu & Inspector)
+    GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 2, 0, ""_s, 0);
+    GroupBorderSpace(10, 4, 10, 4);
+    GroupSpace(10, 0);
+
+    // =============================================================
+    // LEFT COLUMN: Commands Library & Search
+    // =============================================================
+    GroupBegin(IDC_GROUP_CMD_PANEL, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, "Commands"_s, BORDER_GROUP_IN);
+    GroupBorderSpace(8, 8, 8, 8);
+    GroupSpace(0, 6);
+
+    // Search bar row
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Search:"_s, 0);
+    AddEditText(IDC_CMD_SEARCH, BFH_SCALEFIT, 160, 0, EDITTEXT_ENABLECLEARBUTTON);
+    GroupEnd();
+
+    // Count and Quick Assign button
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    AddStaticText(IDC_CMD_COUNT, BFH_LEFT, 0, 0, "0 commands"_s, 0);
+    AddButton(IDC_CMD_BTN_ASSIGN, BFH_RIGHT, 0, 0, "Assign to Slot ->"_s);
+    GroupEnd();
+
+    // TreeView of commands
+    BaseContainer treedata;
+    treedata.SetBool(TREEVIEW_BORDER, true);
+    treedata.SetBool(TREEVIEW_HAS_HEADER, true);
+    treedata.SetBool(TREEVIEW_HIDE_LINES, true);
+    treedata.SetBool(TREEVIEW_FIXED_LAYOUT, true);
+    treedata.SetBool(TREEVIEW_ALTERNATE_BG, true);
+    treedata.SetBool(TREEVIEW_NO_MULTISELECT, true);
+    treedata.SetBool(TREEVIEW_CURSORKEYS, true);
+    treedata.SetBool(TREEVIEW_RESIZE_HEADER, true);
+    treedata.SetBool(TREEVIEW_DRAG_START_REQUIRES_MOVEMENT, true);
+
+    m_treeGui = (TreeViewCustomGui*)AddCustomGui(IDC_CMD_TREEVIEW, CUSTOMGUI_TREEVIEW, String(), BFH_SCALEFIT | BFV_SCALEFIT, 300, 400, treedata);
+
+    // Bottom hint
+    AddStaticText(0, BFH_SCALEFIT, 0, 0, "Drag item to slot or double-click to assign"_s, 0);
+
+    GroupEnd(); // End IDC_GROUP_CMD_PANEL
+
+    // =============================================================
+    // RIGHT COLUMN: Pie Preview, Profile & Properties
+    // =============================================================
+    GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, ""_s, 0);
+    GroupSpace(0, 6);
+
+    // Profile selection bar
     GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
-    GroupBorderSpace(12, 0, 12, 6);
+    GroupBorderSpace(4, 0, 4, 4);
     AddStaticText(0, BFH_LEFT, 0, 0, "Active Profile:"_s, 0);
     AddComboBox(IDC_PROFILE_COMBO, BFH_LEFT, 160, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
     AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 90, 0);
     GroupEnd();
 
-    // 3. UserArea preview
+    // UserArea preview
     GroupBegin(0, BFH_CENTER, 1, 0, ""_s, 0);
-    GroupBorderSpace(12, 4, 12, 8);
+    GroupBorderSpace(4, 0, 4, 4);
     AddUserArea(IDC_USERAREA_PIE, BFH_CENTER | BFV_CENTER, 360, 360);
     AttachUserArea(m_userArea, IDC_USERAREA_PIE);
     GroupEnd();
 
-    // 4. Selected Slot Inspector group
+    // Selected Slot Inspector group
     GroupBegin(IDC_GROUP_INSPECTOR, BFH_SCALEFIT, 2, 0, "Selected Slot Properties"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(12, 8, 12, 8);
+    GroupBorderSpace(10, 6, 10, 6);
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Slot Position:"_s, 0);
     AddStaticText(IDC_INSPECTOR_SLOT_TITLE, BFH_SCALEFIT, 0, 0, ""_s, 0);
@@ -100,9 +342,9 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     GroupEnd();
 
-    // 5. Global Settings group
+    // Global Settings group
     GroupBegin(0, BFH_SCALEFIT, 4, 0, "Global Behavior"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(12, 8, 12, 8);
+    GroupBorderSpace(10, 6, 10, 6);
 
     AddCheckbox(IDC_GLOBAL_CTRLSHIFT, BFH_LEFT, 0, 0, "Hold Ctrl + Shift trigger"_s);
     AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
@@ -115,15 +357,200 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     GroupEnd();
 
-    // 6. Action buttons
+    GroupEnd(); // End Right Column
+
+    GroupEnd(); // End Main 2-column layout
+
+    // 3. Action buttons at bottom
     GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
-    GroupBorderSpace(12, 8, 12, 12);
+    GroupBorderSpace(12, 6, 12, 10);
     AddButton(IDC_BTN_SAVE, BFH_SCALEFIT, 0, 0, "Save Configuration"_s);
     AddButton(IDC_BTN_RESET, BFH_SCALEFIT, 0, 0, "Reset to Defaults"_s);
     AddButton(IDC_BTN_CLOSE, BFH_SCALEFIT, 0, 0, "Close"_s);
     GroupEnd();
 
     return true;
+}
+
+void PieMenuEditorDialog::PopulateAllCommands()
+{
+    if (m_allCommands.GetCount() > 0)
+        return;
+
+    std::unordered_set<Int32> seen;
+
+    // 1. Collect CommandData plugins
+    AutoAlloc<AtomArray> cmdArray;
+    if (cmdArray && FilterPluginList(*cmdArray, PLUGINTYPE::COMMAND, true))
+    {
+        for (Int32 i = 0; i < cmdArray->GetCount(); ++i)
+        {
+            BasePlugin* bp = static_cast<BasePlugin*>(cmdArray->GetIndex(i));
+            if (!bp)
+                continue;
+
+            Int32 id = bp->GetID();
+            if (id <= 0 || (bp->GetInfo() & PLUGINFLAG_HIDE))
+                continue;
+            if (seen.find(id) != seen.end())
+                continue;
+
+            String name = bp->GetName();
+            if (!name.IsPopulated())
+                name = GetCommandName(id);
+            if (!name.IsPopulated())
+                continue;
+
+            seen.insert(id);
+            CommandItem item;
+            item.id = id;
+            item.name = name;
+            item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
+            m_allCommands.Append(item) iferr_ignore("Append");
+        }
+    }
+
+    // 2. Collect ToolData plugins
+    AutoAlloc<AtomArray> toolArray;
+    if (toolArray && FilterPluginList(*toolArray, PLUGINTYPE::TOOL, true))
+    {
+        for (Int32 i = 0; i < toolArray->GetCount(); ++i)
+        {
+            BasePlugin* bp = static_cast<BasePlugin*>(toolArray->GetIndex(i));
+            if (!bp)
+                continue;
+
+            Int32 id = bp->GetID();
+            if (id <= 0 || (bp->GetInfo() & PLUGINFLAG_HIDE))
+                continue;
+            if (seen.find(id) != seen.end())
+                continue;
+
+            String name = bp->GetName();
+            if (!name.IsPopulated())
+                name = GetCommandName(id);
+            if (!name.IsPopulated())
+                continue;
+
+            seen.insert(id);
+            CommandItem item;
+            item.id = id;
+            item.name = name;
+            item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
+            m_allCommands.Append(item) iferr_ignore("Append");
+        }
+    }
+
+    // 3. Fallback: traverse full plugin hierarchy
+    std::function<void(BasePlugin*)> recurse = [&](BasePlugin* bp)
+    {
+        for (; bp; bp = bp->GetNext())
+        {
+            PLUGINTYPE type = bp->GetPluginType();
+            if (type == PLUGINTYPE::COMMAND || type == PLUGINTYPE::TOOL)
+            {
+                Int32 id = bp->GetID();
+                if (id > 0 && !(bp->GetInfo() & PLUGINFLAG_HIDE) && seen.find(id) == seen.end())
+                {
+                    String name = bp->GetName();
+                    if (!name.IsPopulated())
+                        name = GetCommandName(id);
+                    if (name.IsPopulated())
+                    {
+                        seen.insert(id);
+                        CommandItem item;
+                        item.id = id;
+                        item.name = name;
+                        item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
+                        m_allCommands.Append(item) iferr_ignore("Append");
+                    }
+                }
+            }
+            if (bp->GetDown())
+                recurse(bp->GetDown());
+        }
+    };
+    recurse(GetFirstPlugin());
+
+    // Sort alphabetically by name
+    std::sort(m_allCommands.Begin(), m_allCommands.End(), [](const CommandItem& a, const CommandItem& b)
+    {
+        return a.name.Compare(b.name, maxon::STRINGCOMPARISON::CASEINSENSITIVE_NUMBERS) == maxon::COMPARERESULT::LESS;
+    });
+}
+
+void PieMenuEditorDialog::FilterCommands(const String& query)
+{
+    m_filteredCommands.Reset();
+    String q = query;
+    q = q.ToLower();
+
+    for (CommandItem& item : m_allCommands)
+    {
+        Bool match = false;
+        if (q.IsEmpty())
+        {
+            match = true;
+        }
+        else
+        {
+            if (item.name.ToLower().Find(q, nullptr))
+            {
+                match = true;
+            }
+            else
+            {
+                String idStr = String::IntToString(item.id);
+                if (idStr.Find(q, nullptr))
+                    match = true;
+            }
+        }
+
+        if (match)
+        {
+            item.filterIndex = (Int32)m_filteredCommands.GetCount();
+            m_filteredCommands.Append(&item) iferr_ignore("Append");
+        }
+    }
+
+    // Update count label
+    String countStr;
+    if (q.IsEmpty())
+    {
+        countStr = FormatString("@ commands"_s, (Int32)m_filteredCommands.GetCount());
+    }
+    else
+    {
+        countStr = FormatString("@ / @ commands"_s, (Int32)m_filteredCommands.GetCount(), (Int32)m_allCommands.GetCount());
+    }
+    SetString(IDC_CMD_COUNT, countStr);
+
+    if (m_treeGui)
+    {
+        m_treeGui->Refresh();
+    }
+}
+
+void PieMenuEditorDialog::AssignCommandToSelectedSlot(Int32 cmdId)
+{
+    if (cmdId <= 0)
+        return;
+
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (!prof)
+        return;
+
+    Int32 sel = m_userArea.GetSelectedSlot();
+    if (sel < 0 || sel > 8)
+        sel = 0;
+
+    prof->slots[sel].commandId = cmdId;
+    prof->slots[sel].customLabel = GetCommandName(cmdId);
+    prof->slots[sel].enabled = true;
+
+    UpdateInspector();
+    m_userArea.Redraw();
 }
 
 Bool PieMenuEditorDialog::InitValues()
@@ -149,6 +576,25 @@ Bool PieMenuEditorDialog::InitValues()
     SetBool(IDC_GLOBAL_CTRLSHIFT, mgr.m_useCtrlShift);
     SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
     SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
+
+    // Populate and initialize commands library
+    PopulateAllCommands();
+    FilterCommands(""_s);
+
+    if (m_treeGui)
+    {
+        BaseContainer layout;
+        layout.SetInt32('icon', LV_USER);
+        layout.SetInt32('tree', LV_TREE);
+        layout.SetInt32('cmdi', LV_USER);
+        m_treeGui->SetLayout(3, layout);
+        m_treeGui->SetHeaderText('icon', ""_s);
+        m_treeGui->SetHeaderText('tree', "Command"_s);
+        m_treeGui->SetHeaderText('cmdi', "ID"_s);
+
+        m_treeGui->SetRoot(this, &m_treeFunctions, this);
+        m_treeGui->Refresh();
+    }
 
     UpdateInspector();
     return true;
@@ -217,6 +663,21 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
     switch (id)
     {
+        case IDC_CMD_SEARCH:
+        {
+            String q;
+            if (GetString(IDC_CMD_SEARCH, q))
+                FilterCommands(q);
+            break;
+        }
+
+        case IDC_CMD_BTN_ASSIGN:
+        {
+            if (m_selectedCommand)
+                AssignCommandToSelectedSlot(m_selectedCommand->id);
+            break;
+        }
+
         case IDC_PROFILE_COMBO:
         {
             Int32 p = 0;
@@ -346,6 +807,25 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
     return GeDialog::Command(id, msg);
 }
 
+Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& result)
+{
+    switch (msg.GetId())
+    {
+        case BFM_ACTION:
+        {
+            if (msg.GetInt32(BFM_ACTION_ID) == IDC_CMD_SEARCH)
+            {
+                String q;
+                if (GetString(IDC_CMD_SEARCH, q))
+                    FilterCommands(q);
+            }
+            break;
+        }
+    }
+
+    return GeDialog::Message(msg, result);
+}
+
 // ============================================================================
 // COMMAND PLUGIN IMPLEMENTATION
 // ============================================================================
@@ -369,7 +849,7 @@ Int32 PieMenuEditorCommand::GetState(BaseDocument* doc, GeDialog* parentManager)
 
 Bool PieMenuEditorCommand::Execute(BaseDocument* doc, GeDialog* parentManager)
 {
-    return m_dialog.Open(DLG_TYPE::ASYNC, PLUGIN_ID_PIEMENU_EDITOR_COMMAND, -1, -1, 480, 640);
+    return m_dialog.Open(DLG_TYPE::ASYNC, PLUGIN_ID_PIEMENU_EDITOR_COMMAND, -1, -1, 840, 700);
 }
 
 Bool PieMenuEditorCommand::RestoreLayout(void* secret)
