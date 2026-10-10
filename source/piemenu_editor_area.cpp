@@ -46,7 +46,7 @@ Int32 PieMenuEditorArea::GetSlotUnderCoord(Int32 x, Int32 y) const
     if (dist < 32.0)
         return 8; // Center Slot
 
-    if (dist > 185.0)
+    if (dist > 165.0)
         return NOTOK;
 
     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
@@ -55,7 +55,11 @@ Int32 PieMenuEditorArea::GetSlotUnderCoord(Int32 x, Int32 y) const
 
     Float angleRad = std::atan2(dy, dx);
     Float deg = angleRad * (180.0 / PI);
-    return prof->AngleToSlot(deg, dist, 32.0);
+    Int32 slot = prof->AngleToSlot(deg, dist, 32.0);
+    if (slot >= 0 && slot < prof->slotCount)
+        return slot;
+
+    return NOTOK;
 }
 
 Int32 PieMenuEditorArea::ExtractCommandId(Int32 type, void* object, const BaseContainer& msg)
@@ -127,150 +131,307 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
     Float cx = Float(w) * 0.5;
     Float cy = Float(h) * 0.5;
-    Float radius = 118.0;
-    Float deadzone = 32.0;
+
+    // Lambda: draw filled annular ring sector (donut slice) using polygon fill
+    auto drawAnnularSectorPoly = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& fillColor, Int32 steps = 14)
+    {
+        Vector2d pts[64];
+        Int32 idx = 0;
+        for (Int32 s = 0; s <= steps && idx < 32; ++s)
+        {
+            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            pts[idx++] = Vector2d(cenX + std::cos(a) * rOut, cenY + std::sin(a) * rOut);
+        }
+        for (Int32 s = steps; s >= 0 && idx < 64; --s)
+        {
+            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            pts[idx++] = Vector2d(cenX + std::cos(a) * rIn, cenY + std::sin(a) * rIn);
+        }
+        DrawSetPen(fillColor);
+        DrawPolyFill(maxon::Block<const Vector2d>(pts, idx), true);
+    };
+
+    // Lambda: draw contour lines of an annular sector
+    auto drawAnnularSectorBorder = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& borderColor, Float lineWidth, Int32 steps = 14)
+    {
+        Vector2d pts[64];
+        Int32 idx = 0;
+        for (Int32 s = 0; s <= steps && idx < 32; ++s)
+        {
+            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            pts[idx++] = Vector2d(cenX + std::cos(a) * rOut, cenY + std::sin(a) * rOut);
+        }
+        for (Int32 s = steps; s >= 0 && idx < 64; --s)
+        {
+            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            pts[idx++] = Vector2d(cenX + std::cos(a) * rIn, cenY + std::sin(a) * rIn);
+        }
+        DrawSetPen(borderColor);
+        DrawPolyLine(maxon::Block<const Vector2d>(pts, idx), true, lineWidth);
+    };
+
+    // Circular layout dimensions matching QuadDraw style
+    const Float deadzoneRadius = 30.0;
+    const Float baseInnerR = 40.0;
+    const Float baseOuterR = 142.0;
+    const Float hoverInnerR = 36.0;
+    const Float hoverOuterR = 152.0; // Pops out by 10px on selection / drag-hover
 
     Int32 count = prof->slotCount;
     if (count != 4 && count != 8)
         count = 8;
 
-    // Draw spokes and radial slots
+    const Float deg2rad = PI / 180.0;
+    const Float sliceDeg = 360.0 / Float(count);
+    const Float gapDeg = (count == 4) ? 2.5 : 2.0;
+    const Float gapRad = (gapDeg * deg2rad) * 0.5;
+    const Int32 steps = (count == 4) ? 18 : 14;
+
+    // 1. Draw circular segments (Fills and active indicators)
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = prof->slots[i];
-        Float angle = prof->GetSlotAngle(i);
-        Float sx = cx + std::cos(angle) * radius;
-        Float sy = cy + std::sin(angle) * radius;
-
         Bool isSelected = (m_selectedSlot == i);
         Bool isDragHover = (m_dragHoverSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover);
 
-        // Spoke line
-        Vector spokeCol = (isSelected || isDragHover) ? slot.accentColor : Vector(0.24, 0.26, 0.30);
-        DrawSetPen(spokeCol);
-        Float spkStartX = cx + std::cos(angle) * (deadzone + 2.0);
-        Float spkStartY = cy + std::sin(angle) * (deadzone + 2.0);
-        DrawLine((Int32)spkStartX, (Int32)spkStartY, (Int32)sx, (Int32)sy, 1.0);
+        Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
 
-        // Card box (88 x 32 px)
-        Int32 cw = 88;
-        Int32 ch = 32;
-        Int32 bx1 = (Int32)(sx - cw * 0.5);
-        Int32 by1 = (Int32)(sy - ch * 0.5);
-        Int32 bx2 = bx1 + cw;
-        Int32 by2 = by1 + ch;
+        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
+        Float aStart = startDeg * deg2rad + gapRad;
+        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
         Vector bgCol;
         if (!slot.enabled)
-            bgCol = Vector(0.08, 0.08, 0.09);
-        else if (isDragHover)
-            bgCol = Vector(0.32, 0.28, 0.14);
-        else if (isSelected)
-            bgCol = Vector(0.18, 0.26, 0.38);
-        else
-            bgCol = Vector(0.16, 0.17, 0.20);
-
-        DrawSetPen(bgCol);
-        DrawRectangle(bx1, by1, bx2, by2);
-
-        Vector frameCol;
-        if (isDragHover)
-            frameCol = Vector(1.0, 0.9, 0.15);
-        else if (isSelected)
-            frameCol = Vector(0.3, 0.85, 1.0);
-        else if (slot.enabled)
-            frameCol = slot.accentColor * 0.75;
-        else
-            frameCol = Vector(0.24, 0.24, 0.26);
-
-        DrawSetPen(frameCol);
-        DrawFrame(bx1, by1, bx2, by2, (isSelected || isDragHover) ? 2.0 : 1.0);
-
-        // Draw Icon if available
-        Int32 textOffsetX = 8;
-        if (slot.commandId > 0)
         {
-            IconData icon;
-            if (slot.GetIconBitmap(icon) && icon.bmp)
-            {
-                DrawBitmap(icon.bmp, bx1 + 4, by1 + 4, 24, 24, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
-                textOffsetX = 32;
-            }
+            bgCol = Vector(0.07, 0.07, 0.08);
+        }
+        else if (isDragHover)
+        {
+            bgCol = Vector(0.24, 0.22, 0.12) + slot.accentColor * 0.25;
+        }
+        else if (isSelected)
+        {
+            bgCol = Vector(0.14, 0.18, 0.24) + slot.accentColor * 0.25;
+        }
+        else if (slot.commandId > 0)
+        {
+            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.08;
+        }
+        else
+        {
+            bgCol = Vector(0.09, 0.10, 0.13);
         }
 
-        // Draw Title text
-        String label = slot.GetEffectiveTitle();
-        if (label.GetLength() > 9)
+        drawAnnularSectorPoly(cx, cy, rIn, rOut, aStart, aEnd, bgCol, steps);
+
+        // Active / Selected illuminated inner arc strip
+        if (isDragHover)
         {
-            // Truncate long titles to fit cleanly in editor card
-            label = label.SubStr(0, 8);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
+        }
+        else if (isSelected)
+        {
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(0.3, 0.85, 1.0), steps);
+        }
+        else if (slot.enabled && slot.commandId > 0)
+        {
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + 3.5, aStart, aEnd, slot.accentColor * 0.65, steps);
+        }
+    }
+
+    // 2. Draw Borders around segments
+    for (Int32 i = 0; i < count; ++i)
+    {
+        const PieSlot& slot = prof->slots[i];
+        Bool isSelected = (m_selectedSlot == i);
+        Bool isDragHover = (m_dragHoverSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover);
+
+        Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
+
+        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
+        Float aStart = startDeg * deg2rad + gapRad;
+        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
+
+        Vector borderCol;
+        Float borderWidth = 1.0;
+        if (!slot.enabled)
+        {
+            borderCol = Vector(0.18, 0.18, 0.20);
+            borderWidth = 1.0;
+        }
+        else if (isDragHover)
+        {
+            borderCol = Vector(1.0, 0.9, 0.15); // Bright gold drag highlight
+            borderWidth = 2.5;
+        }
+        else if (isSelected)
+        {
+            borderCol = Vector(0.3, 0.85, 1.0); // Electric cyan selection highlight
+            borderWidth = 2.0;
+        }
+        else if (slot.commandId > 0)
+        {
+            borderCol = slot.accentColor * 0.65;
+            borderWidth = 1.2;
+        }
+        else
+        {
+            borderCol = Vector(0.24, 0.27, 0.31);
+            borderWidth = 1.0;
+        }
+
+        drawAnnularSectorBorder(cx, cy, rIn, rOut, aStart, aEnd, borderCol, borderWidth, steps);
+    }
+
+    // 3. Draw Labels and Icons inside each segment
+    for (Int32 i = 0; i < count; ++i)
+    {
+        const PieSlot& slot = prof->slots[i];
+        Bool isSelected = (m_selectedSlot == i);
+        Bool isDragHover = (m_dragHoverSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover);
+
+        Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
+        Float rMid = (rIn + rOut) * 0.5;
+
+        Float midDeg = 270.0 + Float(i) * sliceDeg;
+        Float midRad = midDeg * deg2rad;
+
+        IconData icon;
+        Bool hasIcon = (slot.commandId > 0 && slot.GetIconBitmap(icon) && icon.bmp != nullptr);
+
+        String label = slot.GetEffectiveTitle();
+        if (label.GetLength() > 10)
+        {
+            label = label.SubStr(0, 9);
             label += ".."_s;
         }
 
-        Vector textCol = (isSelected || isDragHover) ? Vector(1.0) : (slot.enabled ? Vector(0.85, 0.88, 0.92) : Vector(0.45));
-        DrawSetTextCol(textCol, COLOR_TRANS);
-        DrawText(label, bx1 + textOffsetX, by1 + 10, DRAWTEXT_HALIGN_LEFT);
+        Vector textCol;
+        if (!slot.enabled)
+            textCol = Vector(0.40, 0.42, 0.46);
+        else if (isSelected || isDragHover)
+            textCol = Vector(1.0, 1.0, 1.0);
+        else if (slot.commandId > 0)
+            textCol = slot.accentColor;
+        else
+            textCol = Vector(0.65, 0.68, 0.72);
+
+        if (hasIcon)
+        {
+            // Position icon slightly closer to inner ring, text slightly closer to outer ring
+            Float rIcon = rMid - 13.0;
+            Float rLabel = rMid + 15.0;
+
+            Float ix = cx + std::cos(midRad) * rIcon;
+            Float iy = cy + std::sin(midRad) * rIcon;
+            DrawBitmap(icon.bmp, (Int32)(ix - 10), (Int32)(iy - 10), 20, 20, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+
+            Float lx = cx + std::cos(midRad) * rLabel;
+            Float ly = cy + std::sin(midRad) * rLabel;
+            DrawSetTextCol(textCol, COLOR_TRANS);
+            DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
+        }
+        else
+        {
+            // Center label inside sector
+            Float lx = cx + std::cos(midRad) * rMid;
+            Float ly = cy + std::sin(midRad) * rMid;
+            DrawSetTextCol(textCol, COLOR_TRANS);
+            DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
+        }
     }
 
-    // Draw Center Slot (Slot 8)
+    // 4. Direction line pointing to selected slot
+    if (m_selectedSlot >= 0 && m_selectedSlot < count)
     {
-        const PieSlot& slot8 = prof->slots[8];
-        Bool isSelected8 = (m_selectedSlot == 8);
-        Bool isDragHover8 = (m_dragHoverSlot == 8);
-
-        Int32 r8 = 30;
-        Int32 bx1 = (Int32)(cx - r8);
-        Int32 by1 = (Int32)(cy - r8);
-        Int32 bx2 = bx1 + r8 * 2;
-        Int32 by2 = by1 + r8 * 2;
-
-        Vector bgCol8;
-        if (isDragHover8)
-            bgCol8 = Vector(0.32, 0.28, 0.14);
-        else if (isSelected8)
-            bgCol8 = Vector(0.18, 0.26, 0.38);
-        else if (!slot8.enabled)
-            bgCol8 = Vector(0.08, 0.08, 0.09);
-        else
-            bgCol8 = Vector(0.15, 0.16, 0.19);
-
-        DrawSetPen(bgCol8);
-        DrawRectangle(bx1, by1, bx2, by2);
-
-        Vector frameCol8;
-        if (isDragHover8)
-            frameCol8 = Vector(1.0, 0.9, 0.15);
-        else if (isSelected8)
-            frameCol8 = Vector(0.3, 0.85, 1.0);
-        else if (slot8.enabled && slot8.commandId > 0)
-            frameCol8 = slot8.accentColor * 0.75;
-        else
-            frameCol8 = Vector(0.3, 0.32, 0.36);
-
-        DrawSetPen(frameCol8);
-        DrawFrame(bx1, by1, bx2, by2, (isSelected8 || isDragHover8) ? 2.0 : 1.0);
-
-        if (slot8.commandId > 0)
-        {
-            IconData icon;
-            if (slot8.GetIconBitmap(icon) && icon.bmp)
-            {
-                DrawBitmap(icon.bmp, (Int32)(cx - 12), (Int32)(cy - 12), 24, 24, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
-            }
-            else
-            {
-                DrawSetTextCol(isSelected8 ? Vector(1.0) : Vector(0.85), COLOR_TRANS);
-                DrawText("Center"_s, (Int32)cx, (Int32)(cy - 5), DRAWTEXT_HALIGN_CENTER);
-            }
-        }
-        else
-        {
-            DrawSetTextCol(Vector(0.5, 0.52, 0.55), COLOR_TRANS);
-            DrawText("Hub"_s, (Int32)cx, (Int32)(cy - 5), DRAWTEXT_HALIGN_CENTER);
-        }
+        Float selMidDeg = 270.0 + Float(m_selectedSlot) * sliceDeg;
+        Float selMidRad = selMidDeg * deg2rad;
+        Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 0.9, 0.15) : Vector(0.3, 0.85, 1.0);
+        DrawSetPen(selCol);
+        Float sx = cx + std::cos(selMidRad) * (deadzoneRadius + 2.0);
+        Float sy = cy + std::sin(selMidRad) * (deadzoneRadius + 2.0);
+        Float ex = cx + std::cos(selMidRad) * (hoverInnerR - 2.0);
+        Float ey = cy + std::sin(selMidRad) * (hoverInnerR - 2.0);
+        DrawLine((Int32)sx, (Int32)sy, (Int32)ex, (Int32)ey, 1.5);
     }
 
-    // Bottom hint
+    // 5. Center Hub (Slot 8)
+    const PieSlot& slot8 = prof->slots[8];
+    Bool isSelected8 = (m_selectedSlot == 8);
+    Bool isDragHover8 = (m_dragHoverSlot == 8);
+
+    Vector hubBgCol;
+    Vector hubBorderCol;
+    Float hubBorderWidth = 1.0;
+
+    if (isDragHover8)
+    {
+        hubBgCol = Vector(0.24, 0.22, 0.12) + slot8.accentColor * 0.25;
+        hubBorderCol = Vector(1.0, 0.9, 0.15);
+        hubBorderWidth = 2.5;
+    }
+    else if (isSelected8)
+    {
+        hubBgCol = Vector(0.14, 0.18, 0.24) + slot8.accentColor * 0.25;
+        hubBorderCol = Vector(0.3, 0.85, 1.0);
+        hubBorderWidth = 2.0;
+    }
+    else if (!slot8.enabled)
+    {
+        hubBgCol = Vector(0.07, 0.07, 0.08);
+        hubBorderCol = Vector(0.18, 0.18, 0.20);
+        hubBorderWidth = 1.0;
+    }
+    else if (slot8.commandId > 0)
+    {
+        hubBgCol = Vector(0.11, 0.13, 0.17) + slot8.accentColor * 0.08;
+        hubBorderCol = slot8.accentColor * 0.65;
+        hubBorderWidth = 1.2;
+    }
+    else
+    {
+        hubBgCol = Vector(0.10, 0.11, 0.14);
+        hubBorderCol = Vector(0.32, 0.35, 0.40);
+        hubBorderWidth = 1.0;
+    }
+
+    DrawSetPen(hubBgCol);
+    DrawEllipseFill(Vector2d(cx, cy), Vector2d(deadzoneRadius, deadzoneRadius));
+
+    DrawSetPen(hubBorderCol);
+    DrawEllipseLine(Vector2d(cx, cy), Vector2d(deadzoneRadius, deadzoneRadius), hubBorderWidth);
+
+    if (slot8.commandId > 0)
+    {
+        IconData icon;
+        if (slot8.GetIconBitmap(icon) && icon.bmp)
+        {
+            DrawBitmap(icon.bmp, (Int32)(cx - 10), (Int32)(cy - 10), 20, 20, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+        }
+        else
+        {
+            DrawSetTextCol((isSelected8 || isDragHover8) ? Vector(1.0) : slot8.accentColor, COLOR_TRANS);
+            DrawText("Center"_s, (Int32)cx, (Int32)(cy - 5), DRAWTEXT_HALIGN_CENTER);
+        }
+    }
+    else
+    {
+        // Crosshair at center
+        DrawSetPen(Vector(0.50, 0.54, 0.60));
+        DrawLine((Int32)(cx - 3.5), (Int32)cy, (Int32)(cx + 3.5), (Int32)cy, 1.0);
+        DrawLine((Int32)cx, (Int32)(cy - 3.5), (Int32)cx, (Int32)(cy + 3.5), 1.0);
+
+        DrawSetTextCol(Vector(0.50, 0.54, 0.60), COLOR_TRANS);
+        DrawText("Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
+    }
+
+    // 6. Bottom hint
     DrawSetTextCol(Vector(0.52, 0.55, 0.60), COLOR_TRANS);
     DrawText("Click slot to inspect | Drag command here to assign"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
 }

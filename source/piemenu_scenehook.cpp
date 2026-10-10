@@ -209,7 +209,9 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
     Float dy = curY - m_originY;
     Float dist = std::sqrt(dx * dx + dy * dy);
 
-    if (dist < mgr.m_deadzone)
+    const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+
+    if (dist < deadzone)
     {
         if (m_activeProfile->slots[8].enabled && m_activeProfile->slots[8].commandId > 0)
         {
@@ -224,7 +226,7 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
 
     Float angleRad = std::atan2(dy, dx);
     Float deg = angleRad * (180.0 / PI);
-    m_hoveredSlot = m_activeProfile->AngleToSlot(deg, dist, mgr.m_deadzone);
+    m_hoveredSlot = m_activeProfile->AngleToSlot(deg, dist, deadzone);
 }
 
 void PieMenuSceneHook::CommitSelection()
@@ -282,33 +284,64 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     Float curX = m_currentX;
     Float curY = m_currentY;
 
-    auto drawScreenQuad = [&](Float x1, Float y1, Float x2, Float y2, const Vector& col)
+    // Lambda: draw filled annular ring sector (donut slice) using triangles
+    auto drawAnnularSector = [&](Float cx, Float cy, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& fillColor, Int32 steps = 14)
     {
-        Vector pts[4] = {
-            Vector(x1, y1, 0.0),
-            Vector(x2, y1, 0.0),
-            Vector(x2, y2, 0.0),
-            Vector(x1, y2, 0.0)
-        };
-        Vector cols[4] = { col, col, col, col };
-        bd->DrawPolygon(pts, cols, true);
+        for (Int32 s = 0; s < steps; ++s)
+        {
+            Float a0 = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a1 = aStart + (Float(s + 1) / Float(steps)) * (aEnd - aStart);
+
+            Float c0 = std::cos(a0), s0 = std::sin(a0);
+            Float c1 = std::cos(a1), s1 = std::sin(a1);
+
+            Vector pIn0(cx + c0 * rIn, cy + s0 * rIn, 0.0);
+            Vector pOut0(cx + c0 * rOut, cy + s0 * rOut, 0.0);
+            Vector pOut1(cx + c1 * rOut, cy + s1 * rOut, 0.0);
+            Vector pIn1(cx + c1 * rIn, cy + s1 * rIn, 0.0);
+
+            Vector tri1[3] = { pIn0, pOut0, pOut1 };
+            Vector triCol1[3] = { fillColor, fillColor, fillColor };
+            bd->DrawPolygon(tri1, triCol1, false);
+
+            Vector tri2[3] = { pIn0, pOut1, pIn1 };
+            Vector triCol2[3] = { fillColor, fillColor, fillColor };
+            bd->DrawPolygon(tri2, triCol2, false);
+        }
         bd->DrawArrayEnd();
     };
 
-    auto drawScreenFrame = [&](Float x1, Float y1, Float x2, Float y2, const Vector& col, Float thickness)
+    // Lambda: draw contour lines of an annular sector
+    auto drawAnnularSectorBorder = [&](Float cx, Float cy, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& borderColor, Float lineWidth, Int32 steps = 14)
     {
-        bd->SetPen(col);
-        bd->DrawLine2D(Vector(x1, y1, 0.0), Vector(x2, y1, 0.0));
-        bd->DrawLine2D(Vector(x2, y1, 0.0), Vector(x2, y2, 0.0));
-        bd->DrawLine2D(Vector(x2, y2, 0.0), Vector(x1, y2, 0.0));
-        bd->DrawLine2D(Vector(x1, y2, 0.0), Vector(x1, y1, 0.0));
-        if (thickness > 1.0)
+        bd->SetDrawParam(DRAW_PARAMETER_LINEWIDTH, GeData(lineWidth));
+        bd->SetPen(borderColor);
+
+        // Outer arc
+        for (Int32 s = 0; s < steps; ++s)
         {
-            bd->DrawLine2D(Vector(x1 - 1.0, y1 - 1.0, 0.0), Vector(x2 + 1.0, y1 - 1.0, 0.0));
-            bd->DrawLine2D(Vector(x2 + 1.0, y1 - 1.0, 0.0), Vector(x2 + 1.0, y2 + 1.0, 0.0));
-            bd->DrawLine2D(Vector(x2 + 1.0, y2 + 1.0, 0.0), Vector(x1 - 1.0, y2 + 1.0, 0.0));
-            bd->DrawLine2D(Vector(x1 - 1.0, y2 + 1.0, 0.0), Vector(x1 - 1.0, y1 - 1.0, 0.0));
+            Float a0 = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a1 = aStart + (Float(s + 1) / Float(steps)) * (aEnd - aStart);
+            bd->DrawLine2D(Vector(cx + std::cos(a0) * rOut, cy + std::sin(a0) * rOut, 0.0),
+                           Vector(cx + std::cos(a1) * rOut, cy + std::sin(a1) * rOut, 0.0));
         }
+
+        // Inner arc
+        for (Int32 s = 0; s < steps; ++s)
+        {
+            Float a0 = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a1 = aStart + (Float(s + 1) / Float(steps)) * (aEnd - aStart);
+            bd->DrawLine2D(Vector(cx + std::cos(a0) * rIn, cy + std::sin(a0) * rIn, 0.0),
+                           Vector(cx + std::cos(a1) * rIn, cy + std::sin(a1) * rIn, 0.0));
+        }
+
+        // Radial dividing edges
+        bd->DrawLine2D(Vector(cx + std::cos(aStart) * rIn, cy + std::sin(aStart) * rIn, 0.0),
+                       Vector(cx + std::cos(aStart) * rOut, cy + std::sin(aStart) * rOut, 0.0));
+        bd->DrawLine2D(Vector(cx + std::cos(aEnd) * rIn, cy + std::sin(aEnd) * rIn, 0.0),
+                       Vector(cx + std::cos(aEnd) * rOut, cy + std::sin(aEnd) * rOut, 0.0));
+
+        bd->SetDrawParam(DRAW_PARAMETER_LINEWIDTH, GeData(1.0));
     };
 
     auto drawScreenCircleFilled = [&](Float cx, Float cy, Float r, const Vector& col, Int32 segments)
@@ -328,76 +361,36 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         bd->DrawArrayEnd();
     };
 
-    // 1. Center hub (deadzone)
-    const Float deadzoneRadius = mgr.m_deadzone;
-    const PieSlot& slot8 = m_activeProfile->slots[8];
-    Bool centerConfigured = (slot8.enabled && slot8.commandId > 0);
-    Bool centerHovered = (m_hoveredSlot == 8);
+    // Radii & spacing (proportional scaling if user customized radius)
+    Float radiusScale = (mgr.m_radius > 60.0) ? (mgr.m_radius / 85.0) : 1.0;
+    const Float deadzoneRadius = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+    const Float baseInnerR = 36.0 * radiusScale;
+    const Float baseOuterR = 112.0 * radiusScale;
+    const Float hoverInnerR = 33.0 * radiusScale;
+    const Float hoverOuterR = 125.0 * radiusScale; // Pops out by 13px on hover
 
-    Vector hubBgCol = centerHovered ? (Vector(0.2, 0.25, 0.3) + slot8.accentColor * 0.2) : Vector(0.12, 0.13, 0.16);
-    drawScreenCircleFilled(ox, oy, deadzoneRadius, hubBgCol, 24);
-
-    Vector hubBorderCol = centerHovered ? slot8.accentColor : (centerConfigured ? slot8.accentColor * 0.7 : Vector(0.38, 0.42, 0.48));
-    bd->SetPen(hubBorderCol);
-    bd->DrawCircle2D((Int32)ox, (Int32)oy, deadzoneRadius);
-
-    if (centerConfigured)
-    {
-        String cTitle = slot8.GetEffectiveTitle();
-        Int32 cLen = cTitle.GetLength();
-        bd->SetPen(centerHovered ? Vector(1.0) : Vector(0.85, 0.88, 0.9));
-        bd->DrawHUDText((Int32)(ox - (cLen * 6.5) * 0.5), (Int32)(oy - 5.0), cTitle);
-    }
-    else
-    {
-        bd->SetPen(Vector(0.5, 0.55, 0.6));
-        bd->DrawLine2D(Vector(ox - 4.0, oy, 0.0), Vector(ox + 4.0, oy, 0.0));
-        bd->DrawLine2D(Vector(ox, oy - 4.0, 0.0), Vector(ox, oy + 4.0, 0.0));
-    }
-
-    // 2. Direction pointer line from center to cursor (when outside deadzone)
-    Float vdx = curX - ox;
-    Float vdy = curY - oy;
-    Float dist = std::sqrt(vdx * vdx + vdy * vdy);
-    if (dist > deadzoneRadius)
-    {
-        Vector pointerCol = (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && m_hoveredSlot < 9) ?
-            m_activeProfile->slots[m_hoveredSlot].accentColor : Vector(0.65, 0.65, 0.7);
-        bd->SetPen(pointerCol);
-        bd->DrawLine2D(Vector(ox, oy, 0.0), Vector(curX, curY, 0.0));
-        drawScreenCircleFilled(curX, curY, 3.5, pointerCol, 12);
-    }
-
-    // 3. Context mode badge
-    String badge = "["_s + m_activeProfile->name + "]"_s;
-    Int32 bLen = badge.GetLength();
-    bd->SetPen(Vector(0.5, 0.7, 0.9));
-    bd->DrawHUDText((Int32)(ox - (bLen * 6.5) * 0.5), (Int32)(oy - mgr.m_radius - 30.0), badge);
-
-    // 4. Render radial tool cards
     Int32 count = m_activeProfile->slotCount;
-    if (count != 4 && count != 8) count = 8;
+    if (count != 4 && count != 8)
+        count = 8;
 
-    const Float distCard = mgr.m_radius;
-    const Float baseW = (count == 4) ? 120.0 : 105.0;
-    const Float baseH = (count == 4) ? 30.0 : 26.0;
+    const Float deg2rad = PI / 180.0;
+    const Float sliceDeg = 360.0 / Float(count);
+    const Float gapDeg = (count == 4) ? 2.2 : 1.8;
+    const Float gapRad = (gapDeg * deg2rad) * 0.5;
+    const Int32 steps = (count == 4) ? 18 : 14;
 
+    // 1. Draw circular segments (Fills and active indicators)
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = m_activeProfile->slots[i];
         Bool isHovered = (m_hoveredSlot == i);
-        Float angle = m_activeProfile->GetSlotAngle(i);
 
-        Float cx = ox + std::cos(angle) * distCard;
-        Float cy = oy + std::sin(angle) * distCard;
+        Float rIn = isHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isHovered ? hoverOuterR : baseOuterR;
 
-        Float hw = (isHovered ? baseW + 10.0 : baseW) * 0.5;
-        Float hh = (isHovered ? baseH + 6.0 : baseH) * 0.5;
-
-        Float x1 = cx - hw;
-        Float x2 = cx + hw;
-        Float y1 = cy - hh;
-        Float y2 = cy + hh;
+        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
+        Float aStart = startDeg * deg2rad + gapRad;
+        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
         Vector bgCol;
         if (!slot.enabled)
@@ -406,37 +399,180 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         }
         else if (isHovered)
         {
-            bgCol = Vector(0.18, 0.22, 0.26) + slot.accentColor * 0.15;
+            bgCol = Vector(0.14, 0.16, 0.20) + slot.accentColor * 0.22;
+        }
+        else if (slot.commandId > 0)
+        {
+            bgCol = Vector(0.10, 0.11, 0.14) + slot.accentColor * 0.06;
         }
         else
         {
-            bgCol = Vector(0.09, 0.10, 0.12);
+            bgCol = Vector(0.09, 0.10, 0.13);
         }
 
-        drawScreenQuad(x1, y1, x2, y2, bgCol);
+        // Draw sector body
+        drawAnnularSector(ox, oy, rIn, rOut, aStart, aEnd, bgCol, steps);
 
-        Vector frameCol = isHovered ? slot.accentColor : (slot.enabled ? Vector(0.30, 0.32, 0.36) : Vector(0.16, 0.16, 0.18));
-        drawScreenFrame(x1, y1, x2, y2, frameCol, isHovered ? 2.0 : 1.0);
-
-        // Connector line from center hub to card
-        Vector spokeCol = isHovered ? slot.accentColor * 0.75 : Vector(0.22, 0.24, 0.28);
-        bd->SetPen(spokeCol);
-        Float spokeStartX = ox + std::cos(angle) * (deadzoneRadius + 2.0);
-        Float spokeStartY = oy + std::sin(angle) * (deadzoneRadius + 2.0);
-        Float spokeEndX = cx - std::cos(angle) * (hw + 2.0);
-        Float spokeEndY = cy - std::sin(angle) * (hh + 2.0);
-        bd->DrawLine2D(Vector(spokeStartX, spokeStartY, 0.0), Vector(spokeEndX, spokeEndY, 0.0));
-
-        // Label text
-        String label = slot.GetEffectiveTitle();
-        Int32 charCount = label.GetLength();
-        Int32 textX = (Int32)(cx - (charCount * 6.5) * 0.5);
-        Int32 textY = (Int32)(cy - 5.0);
-
-        Vector textCol = isHovered ? Vector(1.0, 1.0, 1.0) : (slot.enabled ? Vector(0.82, 0.84, 0.88) : Vector(0.4, 0.4, 0.45));
-        bd->SetPen(textCol);
-        bd->DrawHUDText(textX, textY, label);
+        // If hovered and enabled: draw illuminated inner arc strip
+        if (isHovered && slot.enabled)
+        {
+            Vector activeStripCol = slot.accentColor;
+            drawAnnularSector(ox, oy, rIn, rIn + 4.5 * radiusScale, aStart, aEnd, activeStripCol, steps);
+        }
+        else if (slot.enabled && slot.commandId > 0)
+        {
+            Vector activeStripCol = slot.accentColor * 0.6;
+            drawAnnularSector(ox, oy, rIn, rIn + 3.0 * radiusScale, aStart, aEnd, activeStripCol, steps);
+        }
     }
+
+    // 2. Draw Borders around segments
+    for (Int32 i = 0; i < count; ++i)
+    {
+        const PieSlot& slot = m_activeProfile->slots[i];
+        Bool isHovered = (m_hoveredSlot == i);
+
+        Float rIn = isHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isHovered ? hoverOuterR : baseOuterR;
+
+        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
+        Float aStart = startDeg * deg2rad + gapRad;
+        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
+
+        Vector borderCol;
+        Float borderWidth = 1.0;
+        if (!slot.enabled)
+        {
+            borderCol = Vector(0.16, 0.17, 0.19);
+            borderWidth = 1.0;
+        }
+        else if (isHovered)
+        {
+            borderCol = slot.accentColor;
+            borderWidth = 2.0;
+        }
+        else if (slot.commandId > 0)
+        {
+            borderCol = slot.accentColor * 0.65;
+            borderWidth = 1.2;
+        }
+        else
+        {
+            borderCol = Vector(0.24, 0.27, 0.31);
+            borderWidth = 1.0;
+        }
+
+        drawAnnularSectorBorder(ox, oy, rIn, rOut, aStart, aEnd, borderCol, borderWidth, steps);
+    }
+
+    // 3. Draw Labels inside each segment
+    for (Int32 i = 0; i < count; ++i)
+    {
+        const PieSlot& slot = m_activeProfile->slots[i];
+        Bool isHovered = (m_hoveredSlot == i);
+
+        Float rIn = isHovered ? hoverInnerR : baseInnerR;
+        Float rOut = isHovered ? hoverOuterR : baseOuterR;
+        Float rText = (rIn + rOut) * 0.5;
+
+        Float midDeg = 270.0 + Float(i) * sliceDeg;
+        Float midRad = midDeg * deg2rad;
+
+        Float tx = ox + std::cos(midRad) * rText;
+        Float ty = oy + std::sin(midRad) * rText;
+
+        String labelText = slot.GetEffectiveTitle();
+        Int32 charCount = labelText.GetLength();
+        Int32 textX = (Int32)(tx - (charCount * 6.5) * 0.5);
+        Int32 textY = (Int32)(ty - 5.0);
+
+        Vector textCol;
+        if (!slot.enabled)
+        {
+            textCol = Vector(0.38, 0.40, 0.44);
+        }
+        else if (isHovered)
+        {
+            textCol = Vector(1.0, 1.0, 1.0);
+        }
+        else if (slot.commandId > 0)
+        {
+            textCol = slot.accentColor;
+        }
+        else
+        {
+            textCol = Vector(0.78, 0.82, 0.88);
+        }
+
+        bd->SetPen(textCol);
+        bd->DrawHUDText(textX, textY, labelText);
+    }
+
+    // 4. Center hub (Slot 8 in Pie Menu / deadzone)
+    const PieSlot& slot8 = m_activeProfile->slots[8];
+    Bool centerConfigured = (slot8.enabled && slot8.commandId > 0);
+    Bool centerHovered = (m_hoveredSlot == 8);
+
+    Vector hubBgCol;
+    if (centerHovered)
+        hubBgCol = Vector(0.14, 0.16, 0.20) + slot8.accentColor * 0.22;
+    else if (centerConfigured)
+        hubBgCol = Vector(0.10, 0.11, 0.14) + slot8.accentColor * 0.08;
+    else
+        hubBgCol = Vector(0.10, 0.11, 0.14);
+
+    drawScreenCircleFilled(ox, oy, deadzoneRadius, hubBgCol, 28);
+
+    Vector hubBorderCol;
+    if (centerHovered)
+        hubBorderCol = slot8.accentColor;
+    else if (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && m_hoveredSlot < count)
+        hubBorderCol = m_activeProfile->slots[m_hoveredSlot].accentColor * 0.8;
+    else if (centerConfigured)
+        hubBorderCol = slot8.accentColor * 0.65;
+    else
+        hubBorderCol = Vector(0.32, 0.35, 0.40);
+
+    bd->SetPen(hubBorderCol);
+    bd->DrawCircle2D((Int32)ox, (Int32)oy, deadzoneRadius);
+
+    if (centerConfigured)
+    {
+        String cTitle = slot8.GetEffectiveTitle();
+        Int32 cLen = cTitle.GetLength();
+        bd->SetPen(centerHovered ? Vector(1.0, 1.0, 1.0) : slot8.accentColor);
+        bd->DrawHUDText((Int32)(ox - (cLen * 6.5) * 0.5), (Int32)(oy - 5.0), cTitle);
+    }
+    else
+    {
+        // Crosshair at center
+        bd->SetPen(Vector(0.50, 0.54, 0.60));
+        bd->DrawLine2D(Vector(ox - 3.5, oy, 0.0), Vector(ox + 3.5, oy, 0.0));
+        bd->DrawLine2D(Vector(ox, oy - 3.5, 0.0), Vector(ox, oy + 3.5, 0.0));
+    }
+
+    // 5. Direction pointer line from center to cursor (when outside deadzone)
+    Float vdx = curX - ox;
+    Float vdy = curY - oy;
+    Float dist = std::sqrt(vdx * vdx + vdy * vdy);
+    if (dist > deadzoneRadius)
+    {
+        Vector pointerCol = (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && m_hoveredSlot < count) ?
+            m_activeProfile->slots[m_hoveredSlot].accentColor :
+            (centerHovered ? slot8.accentColor : Vector(0.65, 0.65, 0.70));
+        bd->SetPen(pointerCol);
+        bd->DrawLine2D(Vector(ox, oy, 0.0), Vector(curX, curY, 0.0));
+
+        // Cursor handle dot
+        drawScreenCircleFilled(curX, curY, 3.5, pointerCol, 12);
+    }
+
+    // 6. Context mode badge
+    String badge = "["_s + m_activeProfile->name + "]"_s;
+    Int32 bLen = badge.GetLength();
+    bd->SetPen(Vector(0.50, 0.70, 0.90));
+    bd->DrawHUDText((Int32)(ox - (bLen * 6.5) * 0.5), (Int32)(oy - hoverOuterR - 16.0), badge);
 }
+
 
 } // namespace cinema

@@ -68,7 +68,7 @@ public:
     Bool  m_useCtrlShift = true;
     Int32 m_triggerKey = 'V';
     Float m_radius = 85.0;
-    Float m_deadzone = 22.0;
+    Float m_deadzone = 26.0;
 
 private:
     PieProfileManager();
