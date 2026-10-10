@@ -1,4 +1,5 @@
 #include "piemenu_overlay_win.h"
+#include "piemenu_editor_dialog.h"
 #include <cmath>
 #include <string>
 #include <vector>
@@ -56,14 +57,7 @@ static Bool IsUserTypingText()
     if (_stricmp(className, "Edit") == 0 ||
         _stricmp(className, "RichEdit") == 0 ||
         _stricmp(className, "RichEdit20W") == 0 ||
-        _stricmp(className, "RICHEDIT50W") == 0 ||
-        strstr(className, "Edit") != nullptr)
-    {
-        return true;
-    }
-
-    DWORD_PTR selRes = 0;
-    if (SendMessageTimeoutA(hFocus, EM_GETSEL, 0, 0, SMTO_ABORTIFHUNG, 10, &selRes) != 0)
+        _stricmp(className, "RICHEDIT50W") == 0)
     {
         return true;
     }
@@ -85,6 +79,24 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
             if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN ||
                 wParam == WM_KEYUP || wParam == WM_SYSKEYUP)
             {
+                // Hotkey assignment mode in Pie Menu configuration dialog
+                if (PieMenuEditorDialog::IsCapturingHotkey() &&
+                    (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN))
+                {
+                    if (pkb->vkCode == VK_ESCAPE)
+                    {
+                        PieMenuEditorDialog::s_activeDialog->CancelHotkeyCapture();
+                        return 1;
+                    }
+                    if (pkb->vkCode != VK_CONTROL && pkb->vkCode != VK_LCONTROL && pkb->vkCode != VK_RCONTROL &&
+                        pkb->vkCode != VK_SHIFT && pkb->vkCode != VK_LSHIFT && pkb->vkCode != VK_RSHIFT &&
+                        pkb->vkCode != VK_MENU && pkb->vkCode != VK_LMENU && pkb->vkCode != VK_RMENU)
+                    {
+                        PieMenuEditorDialog::NotifyKeyCaptured((UInt32)pkb->vkCode);
+                        return 1;
+                    }
+                }
+
                 if (pkb->vkCode == VK_ESCAPE && PieMenuOverlay::Get().IsActive())
                 {
                     PieMenuOverlay::Get().CancelAndClose();
@@ -211,15 +223,19 @@ void PieMenuOverlay::Shutdown()
 
 Bool PieMenuOverlay::Open()
 {
-#if defined(MAXON_TARGET_WINDOWS)
-    if (!m_hwnd || m_active)
-        return false;
-
     PieProfileManager& mgr = PieProfileManager::Get();
     BaseDocument* doc = GetActiveDocument();
-    m_activeProfile = mgr.GetActiveProfileForDoc(doc);
-    if (!m_activeProfile)
+    PieProfile* prof = mgr.GetActiveProfileForDoc(doc);
+    return OpenProfile(prof);
+}
+
+Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    if (!m_hwnd || m_active || !profile)
         return false;
+
+    m_activeProfile = profile;
 
     POINT pt;
     GetCursorPos(&pt);
@@ -269,15 +285,20 @@ void PieMenuOverlay::CommitAndClose()
 
     m_ctrlDown = false;
     m_shiftDown = false;
+    m_altDown = false;
+    m_currentKeyDown = 0;
     m_triggerKeyDown = false;
 
     Int32 commandToCall = NOTOK;
+    String slotTitle = "None"_s;
+
     if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
         if (slot.enabled && slot.commandId > 0)
         {
             commandToCall = slot.commandId;
+            slotTitle = slot.GetEffectiveTitle();
         }
     }
 
@@ -303,6 +324,8 @@ void PieMenuOverlay::CancelAndClose()
     m_active = false;
     m_ctrlDown = false;
     m_shiftDown = false;
+    m_altDown = false;
+    m_currentKeyDown = 0;
     m_triggerKeyDown = false;
     m_hoveredSlot = NOTOK;
     m_activeProfile = nullptr;
@@ -313,32 +336,87 @@ void PieMenuOverlay::CancelAndClose()
 void PieMenuOverlay::SyncKeysFromAsync()
 {
 #if defined(MAXON_TARGET_WINDOWS)
+    m_ctrlDown = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+    m_shiftDown = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+                  ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
+                  ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+    m_altDown = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+                ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
+                ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+
+    if (m_currentKeyDown != 0)
+    {
+        if ((GetAsyncKeyState(m_currentKeyDown) & 0x8000) == 0)
+            m_currentKeyDown = 0;
+    }
+
     PieProfileManager& mgr = PieProfileManager::Get();
-    if (mgr.m_useCtrlShift)
+    Int32 trigKey = mgr.m_triggerKey;
+    if (trigKey >= 'a' && trigKey <= 'z')
+        trigKey = toupper(trigKey);
+    if (trigKey > 0)
     {
-        m_ctrlDown = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
-        m_shiftDown = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+        m_triggerKeyDown = (GetAsyncKeyState(trigKey) & 0x8000) != 0;
     }
-    else
+#endif
+}
+
+Bool PieMenuOverlay::IsHotkeyTriggered(const PieHotkey& hk) const
+{
+    if (!hk.enabled)
+        return false;
+
+#if defined(MAXON_TARGET_WINDOWS)
+    bool cDown = m_ctrlDown || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+    bool sDown = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+    bool aDown = m_altDown || ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+
+    if (hk.ctrl != cDown)
+        return false;
+    if (hk.shift != sDown)
+        return false;
+    if (hk.alt != aDown)
+        return false;
+
+    if (hk.vkCode == 0)
     {
-        Int32 trigKey = mgr.m_triggerKey;
-        if (trigKey >= 'a' && trigKey <= 'z')
-            trigKey = toupper(trigKey);
-        if (trigKey > 0)
-        {
-            m_triggerKeyDown = (GetAsyncKeyState(trigKey) & 0x8000) != 0;
-        }
+        // Modifiers-only combo: requires at least one modifier
+        return (hk.ctrl || hk.shift || hk.alt);
     }
+
+    Int32 vk = hk.vkCode;
+    if (vk >= 'a' && vk <= 'z')
+        vk = toupper(vk);
+
+    bool kDown = (m_currentKeyDown == (UInt32)vk) || ((GetAsyncKeyState(vk) & 0x8000) != 0);
+    return kDown;
+#else
+    return false;
 #endif
 }
 
 Bool PieMenuOverlay::IsTriggerHeld() const
 {
+    if (m_activeProfile)
+    {
+        return IsHotkeyTriggered(m_activeProfile->hotkey);
+    }
+
     PieProfileManager& mgr = PieProfileManager::Get();
     if (mgr.m_useCtrlShift)
     {
 #if defined(MAXON_TARGET_WINDOWS)
-        return m_ctrlDown && m_shiftDown;
+        bool cDown = m_ctrlDown || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
+        bool sDown = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+        return cDown && sDown;
 #else
         return mgr.IsTriggerHeld();
 #endif
@@ -346,7 +424,7 @@ Bool PieMenuOverlay::IsTriggerHeld() const
     else
     {
 #if defined(MAXON_TARGET_WINDOWS)
-        return m_triggerKeyDown;
+        return m_triggerKeyDown || ((GetAsyncKeyState(mgr.m_triggerKey) & 0x8000) != 0);
 #else
         return mgr.IsTriggerHeld();
 #endif
@@ -357,24 +435,53 @@ void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
 {
 #if defined(MAXON_TARGET_WINDOWS)
     bool isDown = (msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN);
+    bool isMod = false;
 
     if (vkCode == VK_CONTROL || vkCode == VK_LCONTROL || vkCode == VK_RCONTROL)
     {
+        isMod = true;
         m_ctrlDown = isDown;
-        // If ctrl just went down, check if shift was already physically down
+        if (isDown && !m_shiftDown && (GetAsyncKeyState(VK_SHIFT) & 0x8000))
+        {
+            m_shiftDown = true;
+        }
+        if (isDown && !m_altDown && (GetAsyncKeyState(VK_MENU) & 0x8000))
+        {
+            m_altDown = true;
+        }
+    }
+    else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT || vkCode == VK_RSHIFT)
+    {
+        isMod = true;
+        m_shiftDown = isDown;
+        if (isDown && !m_ctrlDown && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+        {
+            m_ctrlDown = true;
+        }
+        if (isDown && !m_altDown && (GetAsyncKeyState(VK_MENU) & 0x8000))
+        {
+            m_altDown = true;
+        }
+    }
+    else if (vkCode == VK_MENU || vkCode == VK_LMENU || vkCode == VK_RMENU)
+    {
+        isMod = true;
+        m_altDown = isDown;
+        if (isDown && !m_ctrlDown && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
+        {
+            m_ctrlDown = true;
+        }
         if (isDown && !m_shiftDown && (GetAsyncKeyState(VK_SHIFT) & 0x8000))
         {
             m_shiftDown = true;
         }
     }
-    else if (vkCode == VK_SHIFT || vkCode == VK_LSHIFT || vkCode == VK_RSHIFT)
+    else
     {
-        m_shiftDown = isDown;
-        // If shift just went down, check if ctrl was already physically down
-        if (isDown && !m_ctrlDown && (GetAsyncKeyState(VK_CONTROL) & 0x8000))
-        {
-            m_ctrlDown = true;
-        }
+        if (isDown)
+            m_currentKeyDown = vkCode;
+        else if (m_currentKeyDown == vkCode)
+            m_currentKeyDown = 0;
     }
 
     PieProfileManager& mgr = PieProfileManager::Get();
@@ -403,28 +510,80 @@ void PieMenuOverlay::CheckTrigger()
             CancelAndClose();
         m_ctrlDown = false;
         m_shiftDown = false;
+        m_altDown = false;
+        m_currentKeyDown = 0;
         m_triggerKeyDown = false;
         return;
     }
 
-    PieProfileManager& mgr = PieProfileManager::Get();
-    Bool held = IsTriggerHeld();
-
-    if (held)
+    if (m_active)
     {
-        if (!m_active)
+        if (!IsTriggerHeld())
         {
-            if (!mgr.m_useCtrlShift && IsUserTypingText())
-                return;
-
-            Open();
+            CommitAndClose();
         }
     }
     else
     {
-        if (m_active)
+        PieProfileManager& mgr = PieProfileManager::Get();
+        BaseDocument* doc = GetActiveDocument();
+
+        // Find profile matching current keys
+        PieProfile* triggered = nullptr;
+        maxon::BaseArray<PieProfile*> matched;
+        for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
         {
-            CommitAndClose();
+            PieProfile* p = mgr.GetProfile(i);
+            if (p && IsHotkeyTriggered(p->hotkey))
+            {
+                matched.Append(p) iferr_ignore("Append");
+            }
+        }
+
+        if (matched.GetCount() == 1)
+        {
+            triggered = matched[0];
+        }
+        else if (matched.GetCount() > 1)
+        {
+            // Multiple profiles match this combination -> pick by active document mode
+            PieContextMode desired = PieContextMode::Global;
+            if (doc)
+            {
+                Int32 mode = doc->GetMode();
+                if (mode == Mpolygons) desired = PieContextMode::Polygons;
+                else if (mode == Medges) desired = PieContextMode::Edges;
+                else if (mode == Mpoints) desired = PieContextMode::Points;
+                else if (mode == Mobject || mode == Mmodel) desired = PieContextMode::Objects;
+            }
+            for (PieProfile* p : matched)
+            {
+                if (p->context == desired)
+                {
+                    triggered = p;
+                    break;
+                }
+            }
+            if (!triggered)
+                triggered = matched[0];
+        }
+
+        // Safety fallback: if Ctrl+Shift is held and no profile matched, open active profile
+        if (!triggered && m_ctrlDown && m_shiftDown && !m_altDown)
+        {
+            triggered = mgr.GetActiveProfileForDoc(doc);
+        }
+
+        if (triggered)
+        {
+            // Only suppress single-character keys without Ctrl/Alt if typing in an edit field
+            if (!triggered->hotkey.ctrl && !triggered->hotkey.alt && triggered->hotkey.vkCode != 0)
+            {
+                if (IsUserTypingText())
+                    return;
+            }
+
+            OpenProfile(triggered);
         }
     }
 #endif

@@ -1,6 +1,7 @@
 #include "piemenu_editor_dialog.h"
 #include "c4d_general.h"
 #include "c4d_baseplugin.h"
+#include "windows_include.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_set>
@@ -32,8 +33,74 @@ enum
     IDC_CMD_SEARCH,
     IDC_CMD_COUNT,
     IDC_CMD_BTN_ASSIGN,
-    IDC_CMD_TREEVIEW
+    IDC_CMD_TREEVIEW,
+
+    // Menu Hotkey settings
+    IDC_GROUP_MENU_HOTKEY,
+    IDC_HOTKEY_CTRL,
+    IDC_HOTKEY_SHIFT,
+    IDC_HOTKEY_ALT,
+    IDC_HOTKEY_KEY_COMBO,
+    IDC_HOTKEY_ASSIGN_BTN,
+    IDC_HOTKEY_CLEAR_BTN,
+    IDC_HOTKEY_PREVIEW_TEXT
 };
+
+PieMenuEditorDialog* PieMenuEditorDialog::s_activeDialog = nullptr;
+
+struct AvailableKey
+{
+    Int32 vkCode;
+    const Char* name;
+};
+
+static const AvailableKey s_availableKeys[] = {
+    { 0, "None (Modifiers only)" },
+    { 'A', "A" }, { 'B', "B" }, { 'C', "C" }, { 'D', "D" }, { 'E', "E" },
+    { 'F', "F" }, { 'G', "G" }, { 'H', "H" }, { 'I', "I" }, { 'J', "J" },
+    { 'K', "K" }, { 'L', "L" }, { 'M', "M" }, { 'N', "N" }, { 'O', "O" },
+    { 'P', "P" }, { 'Q', "Q" }, { 'R', "R" }, { 'S', "S" }, { 'T', "T" },
+    { 'U', "U" }, { 'V', "V" }, { 'W', "W" }, { 'X', "X" }, { 'Y', "Y" }, { 'Z', "Z" },
+    { '0', "0" }, { '1', "1" }, { '2', "2" }, { '3', "3" }, { '4', "4" },
+    { '5', "5" }, { '6', "6" }, { '7', "7" }, { '8', "8" }, { '9', "9" },
+#if defined(MAXON_TARGET_WINDOWS)
+    { VK_TAB, "Tab" },
+    { VK_SPACE, "Space" },
+    { VK_OEM_3, "~ (Tilde)" },
+    { VK_OEM_4, "[" },
+    { VK_OEM_6, "]" },
+    { VK_OEM_COMMA, "," },
+    { VK_OEM_PERIOD, "." },
+    { VK_OEM_1, ";" },
+    { VK_OEM_7, "'" },
+    { VK_OEM_2, "/" },
+    { VK_OEM_MINUS, "-" },
+    { VK_OEM_PLUS, "=" },
+    { VK_F1, "F1" }, { VK_F2, "F2" }, { VK_F3, "F3" }, { VK_F4, "F4" },
+    { VK_F5, "F5" }, { VK_F6, "F6" }, { VK_F7, "F7" }, { VK_F8, "F8" },
+    { VK_F9, "F9" }, { VK_F10, "F10" }, { VK_F11, "F11" }, { VK_F12, "F12" }
+#endif
+};
+static const Int32 s_availableKeyCount = (Int32)(sizeof(s_availableKeys) / sizeof(s_availableKeys[0]));
+
+static Int32 VkCodeToKeyComboIndex(Int32 vkCode)
+{
+    Int32 target = vkCode;
+    if (target >= 'a' && target <= 'z') target = toupper(target);
+    for (Int32 i = 0; i < s_availableKeyCount; ++i)
+    {
+        if (s_availableKeys[i].vkCode == target)
+            return i;
+    }
+    return 0; // None
+}
+
+static Int32 KeyComboIndexToVkCode(Int32 idx)
+{
+    if (idx >= 0 && idx < s_availableKeyCount)
+        return s_availableKeys[idx].vkCode;
+    return 0;
+}
 
 static const Char* s_slotNames8[9] = {
     "North (Up)",
@@ -240,6 +307,7 @@ Int32 CommandListTreeView::DoubleClick(void* root, void* userdata, void* obj, In
 
 PieMenuEditorDialog::PieMenuEditorDialog()
 {
+    s_activeDialog = this;
 }
 
 Bool PieMenuEditorDialog::CreateLayout()
@@ -306,9 +374,27 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
     GroupBorderSpace(4, 0, 4, 4);
     AddStaticText(0, BFH_LEFT, 0, 0, "Active Profile:"_s, 0);
-    AddComboBox(IDC_PROFILE_COMBO, BFH_LEFT, 160, 0);
+    AddComboBox(IDC_PROFILE_COMBO, BFH_LEFT, 180, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
     AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 90, 0);
+    GroupEnd();
+
+    // Menu Hotkey settings group for the active profile
+    GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 8, 0, "Active Menu Hotkey"_s, BORDER_GROUP_IN);
+    GroupBorderSpace(8, 6, 8, 6);
+    GroupSpace(6, 0);
+
+    AddCheckbox(IDC_HOTKEY_CTRL, BFH_LEFT, 0, 0, "Ctrl"_s);
+    AddCheckbox(IDC_HOTKEY_SHIFT, BFH_LEFT, 0, 0, "Shift"_s);
+    AddCheckbox(IDC_HOTKEY_ALT, BFH_LEFT, 0, 0, "Alt"_s);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Key:"_s, 0);
+    AddComboBox(IDC_HOTKEY_KEY_COMBO, BFH_LEFT, 130, 0);
+
+    AddButton(IDC_HOTKEY_ASSIGN_BTN, BFH_LEFT, 85, 0, "Press Key..."_s);
+    AddButton(IDC_HOTKEY_CLEAR_BTN, BFH_LEFT, 50, 0, "Clear"_s);
+
+    AddStaticText(IDC_HOTKEY_PREVIEW_TEXT, BFH_SCALEFIT, 0, 0, ""_s, 0);
     GroupEnd();
 
     // UserArea preview
@@ -557,15 +643,25 @@ Bool PieMenuEditorDialog::InitValues()
 {
     PieProfileManager& mgr = PieProfileManager::Get();
 
-    // Populate profiles combo
+    // Populate profiles combo with their current hotkeys
     FreeChildren(IDC_PROFILE_COMBO);
     for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
     {
         PieProfile* prof = mgr.GetProfile(i);
         if (prof)
-            AddChild(IDC_PROFILE_COMBO, i, prof->name);
+        {
+            String title = FormatString("@ [@]"_s, prof->name, prof->hotkey.GetDisplayString());
+            AddChild(IDC_PROFILE_COMBO, i, title);
+        }
     }
     SetInt32(IDC_PROFILE_COMBO, m_userArea.GetActiveProfileIndex());
+
+    // Populate key selection combo
+    FreeChildren(IDC_HOTKEY_KEY_COMBO);
+    for (Int32 i = 0; i < s_availableKeyCount; ++i)
+    {
+        AddChild(IDC_HOTKEY_KEY_COMBO, i, String(s_availableKeys[i].name));
+    }
 
     // Populate slot counts
     FreeChildren(IDC_SLOTCOUNT_COMBO);
@@ -597,7 +693,122 @@ Bool PieMenuEditorDialog::InitValues()
     }
 
     UpdateInspector();
+    UpdateHotkeyUI();
     return true;
+}
+
+void PieMenuEditorDialog::UpdateHotkeyUI()
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (!prof)
+        return;
+
+    SetBool(IDC_HOTKEY_CTRL, prof->hotkey.ctrl);
+    SetBool(IDC_HOTKEY_SHIFT, prof->hotkey.shift);
+    SetBool(IDC_HOTKEY_ALT, prof->hotkey.alt);
+
+    Int32 comboIdx = VkCodeToKeyComboIndex(prof->hotkey.vkCode);
+    SetInt32(IDC_HOTKEY_KEY_COMBO, comboIdx);
+
+    String displayStr = prof->hotkey.GetDisplayString();
+    String previewText = FormatString("Assigned: [@]"_s, displayStr);
+    SetString(IDC_HOTKEY_PREVIEW_TEXT, previewText);
+}
+
+void PieMenuEditorDialog::ApplyHotkeyChanges()
+{
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (!prof)
+        return;
+
+    Bool c = false, s = false, a = false;
+    GetBool(IDC_HOTKEY_CTRL, c);
+    GetBool(IDC_HOTKEY_SHIFT, s);
+    GetBool(IDC_HOTKEY_ALT, a);
+
+    Int32 comboIdx = 0;
+    GetInt32(IDC_HOTKEY_KEY_COMBO, comboIdx);
+    Int32 vk = KeyComboIndexToVkCode(comboIdx);
+
+    prof->hotkey.ctrl = c;
+    prof->hotkey.shift = s;
+    prof->hotkey.alt = a;
+    prof->hotkey.vkCode = vk;
+    prof->hotkey.enabled = (c || s || a || vk != 0);
+
+    String displayStr = prof->hotkey.GetDisplayString();
+    SetString(IDC_HOTKEY_PREVIEW_TEXT, FormatString("Assigned: [@]"_s, displayStr));
+
+    // Refresh profile dropdown items so shortcuts in labels stay in sync
+    Int32 curSel = m_userArea.GetActiveProfileIndex();
+    FreeChildren(IDC_PROFILE_COMBO);
+    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+    {
+        PieProfile* p = mgr.GetProfile(i);
+        if (p)
+        {
+            String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
+            AddChild(IDC_PROFILE_COMBO, i, title);
+        }
+    }
+    SetInt32(IDC_PROFILE_COMBO, curSel);
+}
+
+Bool PieMenuEditorDialog::IsCapturingHotkey()
+{
+    return (s_activeDialog != nullptr && s_activeDialog->IsOpen() && s_activeDialog->m_waitingForHotkey);
+}
+
+void PieMenuEditorDialog::NotifyKeyCaptured(UInt32 vkCode)
+{
+    if (!s_activeDialog)
+        return;
+
+#if defined(MAXON_TARGET_WINDOWS)
+    bool c = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
+    bool s = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+    bool a = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    s_activeDialog->SetCapturedHotkey(c, s, a, (Int32)vkCode);
+#endif
+}
+
+void PieMenuEditorDialog::SetCapturedHotkey(Bool ctrl, Bool shift, Bool alt, Int32 vkCode)
+{
+    m_waitingForHotkey = false;
+
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (!prof)
+        return;
+
+    prof->hotkey.ctrl = ctrl;
+    prof->hotkey.shift = shift;
+    prof->hotkey.alt = alt;
+    prof->hotkey.vkCode = vkCode;
+    prof->hotkey.enabled = (ctrl || shift || alt || vkCode != 0);
+
+    UpdateHotkeyUI();
+
+    Int32 curSel = m_userArea.GetActiveProfileIndex();
+    FreeChildren(IDC_PROFILE_COMBO);
+    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+    {
+        PieProfile* p = mgr.GetProfile(i);
+        if (p)
+        {
+            String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
+            AddChild(IDC_PROFILE_COMBO, i, title);
+        }
+    }
+    SetInt32(IDC_PROFILE_COMBO, curSel);
+}
+
+void PieMenuEditorDialog::CancelHotkeyCapture()
+{
+    m_waitingForHotkey = false;
+    UpdateHotkeyUI();
 }
 
 void PieMenuEditorDialog::UpdateInspector()
@@ -685,6 +896,52 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             {
                 m_userArea.SetActiveProfileIndex(p);
                 UpdateInspector();
+                UpdateHotkeyUI();
+            }
+            break;
+        }
+
+        case IDC_HOTKEY_CTRL:
+        case IDC_HOTKEY_SHIFT:
+        case IDC_HOTKEY_ALT:
+        case IDC_HOTKEY_KEY_COMBO:
+        {
+            ApplyHotkeyChanges();
+            break;
+        }
+
+        case IDC_HOTKEY_ASSIGN_BTN:
+        {
+            m_waitingForHotkey = true;
+            SetString(IDC_HOTKEY_PREVIEW_TEXT, ">> Press hotkey on keyboard (Esc cancels) <<"_s);
+            break;
+        }
+
+        case IDC_HOTKEY_CLEAR_BTN:
+        {
+            m_waitingForHotkey = false;
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                prof->hotkey.ctrl = false;
+                prof->hotkey.shift = false;
+                prof->hotkey.alt = false;
+                prof->hotkey.vkCode = 0;
+                prof->hotkey.enabled = false;
+                UpdateHotkeyUI();
+
+                Int32 curSel = m_userArea.GetActiveProfileIndex();
+                FreeChildren(IDC_PROFILE_COMBO);
+                for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+                {
+                    PieProfile* p = mgr.GetProfile(i);
+                    if (p)
+                    {
+                        String title = FormatString("@ [@]"_s, p->name, p->hotkey.GetDisplayString());
+                        AddChild(IDC_PROFILE_COMBO, i, title);
+                    }
+                }
+                SetInt32(IDC_PROFILE_COMBO, curSel);
             }
             break;
         }
@@ -793,6 +1050,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             mgr.SaveToFile();
             InitValues();
             m_userArea.Redraw();
+            UpdateHotkeyUI();
             GePrint("PieMenu: Reset all profiles to factory defaults."_s);
             break;
         }
@@ -811,6 +1069,24 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
 {
     switch (msg.GetId())
     {
+        case BFM_INPUT:
+        {
+            if (m_waitingForHotkey)
+            {
+                Int32 dev = msg.GetInt32(BFM_INPUT_DEVICE);
+                if (dev == BFM_INPUT_KEYBOARD)
+                {
+                    Int32 channel = msg.GetInt32(BFM_INPUT_CHANNEL);
+                    if (channel == KEY_ESC)
+                    {
+                        CancelHotkeyCapture();
+                        return true;
+                    }
+                }
+            }
+            break;
+        }
+
         case BFM_ACTION:
         {
             if (msg.GetInt32(BFM_ACTION_ID) == IDC_CMD_SEARCH)

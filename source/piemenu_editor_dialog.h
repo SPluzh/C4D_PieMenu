@@ -61,6 +61,14 @@ public:
     void UpdateInspector();
     void ApplyInspectorChanges();
 
+    void UpdateHotkeyUI();
+    void ApplyHotkeyChanges();
+    void SetCapturedHotkey(Bool ctrl, Bool shift, Bool alt, Int32 vkCode);
+    void CancelHotkeyCapture();
+
+    static Bool IsCapturingHotkey();
+    static void NotifyKeyCaptured(UInt32 vkCode);
+
     void AssignCommandToSelectedSlot(Int32 cmdId);
     void PopulateAllCommands();
     void FilterCommands(const String& query);
@@ -68,6 +76,9 @@ public:
     const maxon::BaseArray<CommandItem*>& GetFilteredCommands() const { return m_filteredCommands; }
     CommandItem* GetSelectedCommand() const { return m_selectedCommand; }
     void SetSelectedCommand(CommandItem* item) { m_selectedCommand = item; }
+
+    static PieMenuEditorDialog* s_activeDialog;
+    Bool m_waitingForHotkey = false;
 
 private:
     PieMenuEditorArea m_userArea;

@@ -1,4 +1,5 @@
 #include "c4d.h"
+#include "piemenu_data.h"
 #include "piemenu_scenehook.h"
 #include "piemenu_editor_dialog.h"
 #include "piemenu_overlay_win.h"

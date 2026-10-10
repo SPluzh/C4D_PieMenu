@@ -39,12 +39,26 @@ enum class PieContextMode
     Objects
 };
 
+struct PieHotkey
+{
+    Bool  enabled = true;
+    Bool  ctrl = true;
+    Bool  shift = true;
+    Bool  alt = false;
+    Int32 vkCode = 0; // Virtual key code ('A'-'Z', '0'-'9', VK_TAB, etc.). 0 = none / modifiers only
+
+    maxon::String GetDisplayString() const;
+    Bool IsPhysicallyDown() const;
+    Bool IsMatch(Bool ctrlDown, Bool shiftDown, Bool altDown, Int32 key) const;
+};
+
 struct PieProfile
 {
     maxon::String  name;
     PieContextMode context = PieContextMode::Global;
     Int32          slotCount = 8; // 4 or 8
     PieSlot        slots[9];      // 0..7 radial, 8 is Center
+    PieHotkey      hotkey;
 
     Float GetSlotAngle(Int32 index) const;
     Int32 AngleToSlot(Float deg, Float dist, Float deadzone) const;
@@ -63,6 +77,11 @@ public:
     PieProfile* GetProfile(Int32 index);
     PieProfile* GetActiveProfileForDoc(BaseDocument* doc);
     Int32 GetActiveProfileIndex(BaseDocument* doc);
+
+    PieProfile* FindTriggeredProfile(BaseDocument* doc) const;
+    Int32 FindTriggeredProfileIndex(BaseDocument* doc) const;
+    Bool IsProfileHotkeyHeld(const PieProfile* prof) const;
+
     Bool  IsTriggerHeld() const;
 
     // Global settings

@@ -18,6 +18,7 @@ public:
     Bool IsActive() const { return m_active; }
 
     Bool Open();
+    Bool OpenProfile(PieProfile* profile);
     void CommitAndClose();
     void CancelAndClose();
 
@@ -25,6 +26,7 @@ public:
     void OnKeyboardHook(UInt32 vkCode, UInt32 msg);
     void SyncKeysFromAsync();
     Bool IsTriggerHeld() const;
+    Bool IsHotkeyTriggered(const PieHotkey& hk) const;
     void OnMouseMove(Int32 screenX, Int32 screenY);
 
     Int64 HandleMessage(void* hwnd, UInt32 msg, UInt64 wParam, Int64 lParam);
@@ -43,6 +45,8 @@ private:
 
     bool        m_ctrlDown = false;
     bool        m_shiftDown = false;
+    bool        m_altDown = false;
+    UInt32      m_currentKeyDown = 0;
     bool        m_triggerKeyDown = false;
 
     Int32       m_originScreenX = 0;

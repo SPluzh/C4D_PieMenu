@@ -7,6 +7,154 @@
 namespace cinema
 {
 
+static const Int32 PIE_CONFIG_MAGIC_V2 = 0x50494532; // "PIE2"
+
+static maxon::String GetKeyNameString(Int32 vkCode)
+{
+    if (vkCode >= 'A' && vkCode <= 'Z')
+    {
+        Char c = (Char)vkCode;
+        return maxon::String(&c, 1);
+    }
+    if (vkCode >= 'a' && vkCode <= 'z')
+    {
+        Char c = (Char)toupper(vkCode);
+        return maxon::String(&c, 1);
+    }
+    if (vkCode >= '0' && vkCode <= '9')
+    {
+        Char c = (Char)vkCode;
+        return maxon::String(&c, 1);
+    }
+#if defined(MAXON_TARGET_WINDOWS)
+    if (vkCode >= VK_F1 && vkCode <= VK_F12)
+    {
+        return FormatString("F@"_s, (vkCode - VK_F1 + 1));
+    }
+    switch (vkCode)
+    {
+        case VK_TAB: return "Tab"_s;
+        case VK_SPACE: return "Space"_s;
+        case VK_OEM_3: return "~ (Tilde)"_s;
+        case VK_OEM_4: return "["_s;
+        case VK_OEM_6: return "]"_s;
+        case VK_OEM_COMMA: return ","_s;
+        case VK_OEM_PERIOD: return "."_s;
+        case VK_OEM_1: return ";"_s;
+        case VK_OEM_7: return "'"_s;
+        case VK_OEM_2: return "/"_s;
+        case VK_OEM_MINUS: return "-"_s;
+        case VK_OEM_PLUS: return "="_s;
+        default: break;
+    }
+#endif
+    if (vkCode > 0)
+        return FormatString("Key #@"_s, vkCode);
+
+    return maxon::String();
+}
+
+maxon::String PieHotkey::GetDisplayString() const
+{
+    if (!enabled)
+        return "Disabled"_s;
+
+    maxon::BaseArray<maxon::String> parts;
+    if (ctrl)
+        parts.Append("Ctrl"_s) iferr_ignore("Append");
+    if (alt)
+        parts.Append("Alt"_s) iferr_ignore("Append");
+    if (shift)
+        parts.Append("Shift"_s) iferr_ignore("Append");
+
+    if (vkCode != 0)
+    {
+        maxon::String kn = GetKeyNameString(vkCode);
+        if (kn.IsPopulated())
+            parts.Append(kn) iferr_ignore("Append");
+    }
+
+    if (parts.IsEmpty())
+        return "None"_s;
+
+    maxon::String res;
+    for (Int32 i = 0; i < (Int32)parts.GetCount(); ++i)
+    {
+        if (i > 0)
+            res += " + "_s;
+        res += parts[i];
+    }
+
+    return res;
+}
+
+Bool PieHotkey::IsPhysicallyDown() const
+{
+    if (!enabled)
+        return false;
+
+#if defined(MAXON_TARGET_WINDOWS)
+    bool cDown = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+    bool sDown = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+    bool aDown = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+
+    if (ctrl != cDown)
+        return false;
+    if (shift != sDown)
+        return false;
+    if (alt != aDown)
+        return false;
+
+    if (vkCode == 0)
+    {
+        // Modifiers-only combo requires at least one modifier
+        return (ctrl || shift || alt);
+    }
+
+    Int32 vk = vkCode;
+    if (vk >= 'a' && vk <= 'z')
+        vk = toupper(vk);
+
+    return (GetAsyncKeyState(vk) & 0x8000) != 0;
+#else
+    return false;
+#endif
+}
+
+Bool PieHotkey::IsMatch(Bool ctrlDown, Bool shiftDown, Bool altDown, Int32 key) const
+{
+    if (!enabled)
+        return false;
+
+    if (ctrl != ctrlDown)
+        return false;
+    if (shift != shiftDown)
+        return false;
+    if (alt != altDown)
+        return false;
+
+    if (vkCode == 0)
+    {
+        return (ctrl || shift || alt);
+    }
+
+    Int32 vk = vkCode;
+    if (vk >= 'a' && vk <= 'z')
+        vk = toupper(vk);
+
+    Int32 k = key;
+    if (k >= 'a' && k <= 'z')
+        k = toupper(k);
+
+    return (vk == k);
+}
+
 maxon::String PieSlot::GetEffectiveTitle() const
 {
     if (customLabel.IsPopulated())
@@ -112,6 +260,11 @@ void PieProfileManager::InitDefaults()
         p.name = "Polygons"_s;
         p.context = PieContextMode::Polygons;
         p.slotCount = 8;
+        p.hotkey.enabled = true;
+        p.hotkey.ctrl = true;
+        p.hotkey.shift = true;
+        p.hotkey.alt = false;
+        p.hotkey.vkCode = 0;
 
         // 0: Up -> Extrude
         p.slots[0].commandId = 1011152;
@@ -169,6 +322,11 @@ void PieProfileManager::InitDefaults()
         p.name = "Edges"_s;
         p.context = PieContextMode::Edges;
         p.slotCount = 8;
+        p.hotkey.enabled = true;
+        p.hotkey.ctrl = true;
+        p.hotkey.shift = true;
+        p.hotkey.alt = false;
+        p.hotkey.vkCode = 0;
 
         // 0: Up -> Bevel
         p.slots[0].commandId = 1011155;
@@ -226,6 +384,11 @@ void PieProfileManager::InitDefaults()
         p.name = "Points"_s;
         p.context = PieContextMode::Points;
         p.slotCount = 8;
+        p.hotkey.enabled = true;
+        p.hotkey.ctrl = true;
+        p.hotkey.shift = true;
+        p.hotkey.alt = false;
+        p.hotkey.vkCode = 0;
 
         // 0: Up -> Optimize
         p.slots[0].commandId = 1011167;
@@ -283,6 +446,11 @@ void PieProfileManager::InitDefaults()
         p.name = "Objects"_s;
         p.context = PieContextMode::Objects;
         p.slotCount = 8;
+        p.hotkey.enabled = true;
+        p.hotkey.ctrl = true;
+        p.hotkey.shift = true;
+        p.hotkey.alt = false;
+        p.hotkey.vkCode = 0;
 
         // 0: Up -> Group Objects (Alt+G)
         p.slots[0].commandId = 12141;
@@ -340,6 +508,11 @@ void PieProfileManager::InitDefaults()
         p.name = "Global"_s;
         p.context = PieContextMode::Global;
         p.slotCount = 4;
+        p.hotkey.enabled = true;
+        p.hotkey.ctrl = true;
+        p.hotkey.shift = true;
+        p.hotkey.alt = false;
+        p.hotkey.vkCode = 0;
 
         // 0: Up -> Live Selection
         p.slots[0].commandId = 200000083;
@@ -382,17 +555,49 @@ Bool PieProfileManager::LoadFromFile()
     Filename path = GetConfigPath();
     AutoAlloc<BaseFile> file;
     if (!file || !file->Open(path, FILEOPEN::READ))
+    {
+        if (m_profiles.IsEmpty())
+            InitDefaults();
         return false;
+    }
+
+    Int32 firstVal = 0;
+    if (!file->ReadInt32(&firstVal))
+    {
+        if (m_profiles.IsEmpty())
+            InitDefaults();
+        return false;
+    }
 
     Int32 profileCount = 0;
-    if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 32)
+    Bool isV2 = false;
+
+    if (firstVal == PIE_CONFIG_MAGIC_V2)
+    {
+        isV2 = true;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 32)
+        {
+            if (m_profiles.IsEmpty())
+                InitDefaults();
+            return false;
+        }
+    }
+    else if (firstVal > 0 && firstVal <= 32)
+    {
+        isV2 = false;
+        profileCount = firstVal;
+    }
+    else
+    {
+        if (m_profiles.IsEmpty())
+            InitDefaults();
         return false;
+    }
 
     m_profiles.Reset();
     for (Int32 p = 0; p < profileCount; ++p)
     {
         PieProfile prof;
-        String name;
         Int32 ctx = 0;
         file->ReadString(&prof.name);
         file->ReadInt32(&ctx);
@@ -406,6 +611,35 @@ Bool PieProfileManager::LoadFromFile()
             file->ReadVector64(&prof.slots[s].accentColor);
             file->ReadBool(&prof.slots[s].enabled);
         }
+
+        if (isV2)
+        {
+            file->ReadBool(&prof.hotkey.enabled);
+            file->ReadBool(&prof.hotkey.ctrl);
+            file->ReadBool(&prof.hotkey.shift);
+            file->ReadBool(&prof.hotkey.alt);
+            file->ReadInt32(&prof.hotkey.vkCode);
+
+            // Self-healing: if an unconfigured/disabled hotkey was read, restore to default Ctrl+Shift
+            if (!prof.hotkey.enabled || (!prof.hotkey.ctrl && !prof.hotkey.shift && !prof.hotkey.alt && prof.hotkey.vkCode == 0))
+            {
+                prof.hotkey.enabled = true;
+                prof.hotkey.ctrl = true;
+                prof.hotkey.shift = true;
+                prof.hotkey.alt = false;
+                prof.hotkey.vkCode = 0;
+            }
+        }
+        else
+        {
+            // Backward-compatibility: initialize with default Ctrl+Shift
+            prof.hotkey.enabled = true;
+            prof.hotkey.ctrl = true;
+            prof.hotkey.shift = true;
+            prof.hotkey.alt = false;
+            prof.hotkey.vkCode = 0;
+        }
+
         m_profiles.Append(prof) iferr_ignore("Append");
     }
 
@@ -415,6 +649,12 @@ Bool PieProfileManager::LoadFromFile()
     file->ReadFloat64(&m_deadzone);
 
     file->Close();
+
+    if (m_profiles.IsEmpty())
+    {
+        InitDefaults();
+    }
+
     return true;
 }
 
@@ -424,6 +664,9 @@ Bool PieProfileManager::SaveToFile()
     AutoAlloc<BaseFile> file;
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
+
+    // Write magic V2 header to denote per-profile hotkey format
+    file->WriteInt32(PIE_CONFIG_MAGIC_V2);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -442,6 +685,12 @@ Bool PieProfileManager::SaveToFile()
             file->WriteVector64(prof.slots[s].accentColor);
             file->WriteBool(prof.slots[s].enabled);
         }
+
+        file->WriteBool(prof.hotkey.enabled);
+        file->WriteBool(prof.hotkey.ctrl);
+        file->WriteBool(prof.hotkey.shift);
+        file->WriteBool(prof.hotkey.alt);
+        file->WriteInt32(prof.hotkey.vkCode);
     }
 
     file->WriteBool(m_useCtrlShift);
@@ -488,6 +737,56 @@ PieProfile* PieProfileManager::GetActiveProfileForDoc(BaseDocument* doc)
 {
     Int32 idx = GetActiveProfileIndex(doc);
     return GetProfile(idx);
+}
+
+PieProfile* PieProfileManager::FindTriggeredProfile(BaseDocument* doc) const
+{
+    Int32 idx = FindTriggeredProfileIndex(doc);
+    if (idx >= 0 && idx < (Int32)m_profiles.GetCount())
+        return const_cast<PieProfile*>(&m_profiles[idx]);
+    return nullptr;
+}
+
+Int32 PieProfileManager::FindTriggeredProfileIndex(BaseDocument* doc) const
+{
+    maxon::BaseArray<Int32> matched;
+    for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+    {
+        if (m_profiles[i].hotkey.IsPhysicallyDown())
+        {
+            matched.Append(i) iferr_ignore("Append");
+        }
+    }
+
+    if (matched.IsEmpty())
+        return NOTOK;
+
+    if (matched.GetCount() == 1)
+        return matched[0];
+
+    // If multiple profiles share this shortcut, match current document mode
+    PieContextMode desired = PieContextMode::Global;
+    if (doc)
+    {
+        Int32 mode = doc->GetMode();
+        if (mode == Mpolygons) desired = PieContextMode::Polygons;
+        else if (mode == Medges) desired = PieContextMode::Edges;
+        else if (mode == Mpoints) desired = PieContextMode::Points;
+        else if (mode == Mobject || mode == Mmodel) desired = PieContextMode::Objects;
+    }
+
+    for (Int32 idx : matched)
+    {
+        if (m_profiles[idx].context == desired)
+            return idx;
+    }
+
+    return matched[0];
+}
+
+Bool PieProfileManager::IsProfileHotkeyHeld(const PieProfile* prof) const
+{
+    return prof ? prof->hotkey.IsPhysicallyDown() : false;
 }
 
 Bool PieProfileManager::IsTriggerHeld() const
