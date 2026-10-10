@@ -218,7 +218,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else if (isSelected)
         {
-            bgCol = Vector(0.14, 0.18, 0.24) + slot.accentColor * 0.25;
+            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.25;
         }
         else if (!slot.enabled)
         {
@@ -246,7 +246,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else if (isSelected)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(0.3, 0.85, 1.0), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, slot.accentColor, steps);
         }
         else if (slot.enabled && slot.commandId > 0)
         {
@@ -284,8 +284,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else if (isSelected)
         {
-            borderCol = Vector(0.3, 0.85, 1.0); // Electric cyan selection highlight
-            borderWidth = 2.0;
+            borderCol = slot.accentColor; // Selection highlight in slot's own accent color
+            borderWidth = 2.2;
         }
         else if (!slot.enabled)
         {
@@ -377,7 +377,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     {
         Float selMidDeg = 270.0 + Float(m_selectedSlot) * sliceDeg;
         Float selMidRad = selMidDeg * deg2rad;
-        Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 0.9, 0.15) : Vector(0.3, 0.85, 1.0);
+        Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 0.9, 0.15) : prof->slots[m_selectedSlot].accentColor;
         DrawSetPen(selCol);
         Float sx = cx + std::cos(selMidRad) * (deadzoneRadius + 2.0);
         Float sy = cy + std::sin(selMidRad) * (deadzoneRadius + 2.0);
@@ -410,9 +410,9 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (isSelected8)
     {
-        hubBgCol = Vector(0.14, 0.18, 0.24) + slot8.accentColor * 0.25;
-        hubBorderCol = Vector(0.3, 0.85, 1.0);
-        hubBorderWidth = 2.0;
+        hubBgCol = Vector(0.11, 0.13, 0.17) + slot8.accentColor * 0.25;
+        hubBorderCol = slot8.accentColor;
+        hubBorderWidth = 2.2;
     }
     else if (!slot8.enabled)
     {
@@ -455,11 +455,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     else
     {
         // Crosshair at center
-        DrawSetPen(Vector(0.50, 0.54, 0.60));
+        DrawSetPen(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60));
         DrawLine((Int32)(cx - 3.5), (Int32)cy, (Int32)(cx + 3.5), (Int32)cy, 1.0);
         DrawLine((Int32)cx, (Int32)(cy - 3.5), (Int32)cx, (Int32)(cy + 3.5), 1.0);
 
-        DrawSetTextCol(Vector(0.50, 0.54, 0.60), COLOR_TRANS);
+        DrawSetTextCol(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60), COLOR_TRANS);
         DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
     }
 
