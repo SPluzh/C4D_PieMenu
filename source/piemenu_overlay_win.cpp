@@ -158,6 +158,12 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
                     }
                 }
 
+                if (pkb->vkCode == VK_BACK && PieMenuOverlay::Get().IsActive())
+                {
+                    if (PieMenuOverlay::Get().NavigateBack())
+                        return 1;
+                }
+
                 if (pkb->vkCode == VK_ESCAPE && PieMenuOverlay::Get().IsActive())
                 {
                     PieMenuOverlay::Get().CancelAndClose();
@@ -300,6 +306,10 @@ Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
         return false;
 
     m_activeProfile = profile;
+    m_profileStack.Reset();
+    m_hoverStartTick = 0;
+    m_lastHoveredSlot = NOTOK;
+    m_pinnedOpen = false;
 
     POINT pt;
     GetCursorPos(&pt);
@@ -336,11 +346,160 @@ Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
 #endif
 }
 
+Bool PieMenuOverlay::CanNavigateTo(const PieProfile* profile) const
+{
+    if (!profile || profile == m_activeProfile)
+        return false;
+
+    for (const PieProfile* p : m_profileStack)
+    {
+        if (p == profile)
+            return false;
+    }
+
+    return true;
+}
+
+Bool PieMenuOverlay::NavigateToSubmenu(PieProfile* subProfile)
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    if (!m_active || !subProfile || !CanNavigateTo(subProfile))
+        return false;
+
+    m_profileStack.Append(m_activeProfile) iferr_ignore("Append");
+    m_activeProfile = subProfile;
+    m_hoveredSlot = NOTOK;
+    m_lastHoveredSlot = NOTOK;
+    m_hoverStartTick = 0;
+
+    POINT pt;
+    GetCursorPos(&pt);
+    m_originScreenX = pt.x;
+    m_originScreenY = pt.y;
+    m_currentScreenX = pt.x;
+    m_currentScreenY = pt.y;
+
+    int winX = m_originScreenX - OVERLAY_SIZE / 2;
+    int winY = m_originScreenY - OVERLAY_SIZE / 2;
+
+    SetWindowPos((HWND)m_hwnd, HWND_TOPMOST, winX, winY, OVERLAY_SIZE, OVERLAY_SIZE,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    RenderOverlay();
+
+    if (m_activeProfile)
+    {
+        maxon::String ctxStr = GetContextShortName(m_activeProfile->context);
+        StatusSetText(FormatString("Pie Submenu [@ - @]: Select command (RMB / Backspace / Center to return)"_s, m_activeProfile->name, ctxStr));
+    }
+
+    return true;
+#else
+    return false;
+#endif
+}
+
+Bool PieMenuOverlay::NavigateBack()
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    if (!m_active || m_profileStack.IsEmpty())
+        return false;
+
+    Int32 lastIdx = m_profileStack.GetCount() - 1;
+    m_activeProfile = m_profileStack[lastIdx];
+    m_profileStack.Erase(lastIdx) iferr_ignore("Erase");
+
+    m_hoveredSlot = NOTOK;
+    m_lastHoveredSlot = NOTOK;
+    m_hoverStartTick = 0;
+
+    POINT pt;
+    GetCursorPos(&pt);
+    m_originScreenX = pt.x;
+    m_originScreenY = pt.y;
+    m_currentScreenX = pt.x;
+    m_currentScreenY = pt.y;
+
+    int winX = m_originScreenX - OVERLAY_SIZE / 2;
+    int winY = m_originScreenY - OVERLAY_SIZE / 2;
+
+    SetWindowPos((HWND)m_hwnd, HWND_TOPMOST, winX, winY, OVERLAY_SIZE, OVERLAY_SIZE,
+                 SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    RenderOverlay();
+
+    if (m_activeProfile)
+    {
+        maxon::String ctxStr = GetContextShortName(m_activeProfile->context);
+        StatusSetText(FormatString("Pie Menu [@ - @]: Move cursor toward a slot to select"_s, m_activeProfile->name, ctxStr));
+    }
+
+    return true;
+#else
+    return false;
+#endif
+}
+
 void PieMenuOverlay::CommitAndClose()
 {
 #if defined(MAXON_TARGET_WINDOWS)
     if (!m_active)
         return;
+
+    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    {
+        const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+        if (slot.enabled && slot.IsSubMenu())
+        {
+            PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
+            if (sub && CanNavigateTo(sub))
+            {
+                NavigateToSubmenu(sub);
+                m_pinnedOpen = true;
+                return;
+            }
+        }
+        else if (m_hoveredSlot == 8 && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        {
+            NavigateBack();
+            return;
+        }
+    }
+    else if (!m_profileStack.IsEmpty())
+    {
+        // Check if inside center deadzone (Back button)
+        Float dx = Float(m_currentScreenX - m_originScreenX);
+        Float dy = Float(m_currentScreenY - m_originScreenY);
+        Float dist = std::sqrt(dx * dx + dy * dy);
+        PieProfileManager& mgr = PieProfileManager::Get();
+        const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+        if (dist < deadzone)
+        {
+            NavigateBack();
+            return;
+        }
+
+        // Inside a submenu, if user released trigger or clicked empty space,
+        // pin the submenu open so the user can see choices and select them
+        if (!m_pinnedOpen)
+        {
+            m_pinnedOpen = true;
+            return;
+        }
+    }
+
+    Int32 commandToCall = NOTOK;
+    String slotTitle = "None"_s;
+
+    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    {
+        const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+        if (slot.enabled && slot.commandId > 0 && !slot.IsSubMenu())
+        {
+            commandToCall = slot.commandId;
+            slotTitle = slot.GetEffectiveTitle();
+        }
+    }
 
     KillTimer((HWND)m_hwnd, TIMER_ID);
     ReleaseCapture();
@@ -353,22 +512,12 @@ void PieMenuOverlay::CommitAndClose()
     m_altDown = false;
     m_currentKeyDown = 0;
     m_triggerKeyDown = false;
-
-    Int32 commandToCall = NOTOK;
-    String slotTitle = "None"_s;
-
-    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
-    {
-        const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-        if (slot.enabled && slot.commandId > 0)
-        {
-            commandToCall = slot.commandId;
-            slotTitle = slot.GetEffectiveTitle();
-        }
-    }
-
     m_hoveredSlot = NOTOK;
     m_activeProfile = nullptr;
+    m_profileStack.Reset();
+    m_hoverStartTick = 0;
+    m_lastHoveredSlot = NOTOK;
+    m_pinnedOpen = false;
 
     if (commandToCall > 0)
     {
@@ -394,6 +543,10 @@ void PieMenuOverlay::CancelAndClose()
     m_triggerKeyDown = false;
     m_hoveredSlot = NOTOK;
     m_activeProfile = nullptr;
+    m_profileStack.Reset();
+    m_hoverStartTick = 0;
+    m_lastHoveredSlot = NOTOK;
+    m_pinnedOpen = false;
     StatusSetText(""_s);
 #endif
 }
@@ -461,6 +614,13 @@ Bool PieMenuOverlay::IsHotkeyTriggered(const PieHotkey& hk) const
 
 Bool PieMenuOverlay::IsTriggerHeld() const
 {
+    // When navigated into a submenu hierarchy, the trigger hotkey being held
+    // is ALWAYS the hotkey of the root menu profile that opened the pie menu session!
+    if (!m_profileStack.IsEmpty() && m_profileStack[0])
+    {
+        return IsHotkeyTriggered(m_profileStack[0]->hotkey);
+    }
+
     if (m_activeProfile)
     {
         return IsHotkeyTriggered(m_activeProfile->hotkey);
@@ -546,7 +706,7 @@ void PieMenuOverlay::CheckTrigger()
 
     if (m_active)
     {
-        if (!IsTriggerHeld())
+        if (!m_pinnedOpen && !IsTriggerHeld())
         {
             CommitAndClose();
         }
@@ -642,7 +802,11 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
 
     if (dist < deadzone)
     {
-        if (m_activeProfile->slots[8].enabled && m_activeProfile->slots[8].commandId > 0)
+        if (m_activeProfile->slots[8].enabled && (m_activeProfile->slots[8].commandId > 0 || m_activeProfile->slots[8].IsSubMenu()))
+        {
+            m_hoveredSlot = 8;
+        }
+        else if (!m_profileStack.IsEmpty())
         {
             m_hoveredSlot = 8;
         }
@@ -666,10 +830,27 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         m_hoveredSlot = s;
     }
 
+    if (m_hoveredSlot != m_lastHoveredSlot)
+    {
+        m_lastHoveredSlot = m_hoveredSlot;
+        m_hoverStartTick = (UInt32)GetTickCount();
+    }
+
     if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-        StatusSetText(FormatString("Pie Menu [@]: @ | Release trigger to execute"_s, m_activeProfile->name, slot.GetEffectiveTitle()));
+        if (m_hoveredSlot == 8 && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        {
+            StatusSetText("Pie Menu: [Back to parent menu] (Click or release to go back)"_s);
+        }
+        else if (slot.IsSubMenu())
+        {
+            StatusSetText(FormatString("Pie Menu [@]: Submenu > @ | Hover or click to open"_s, m_activeProfile->name, slot.GetEffectiveTitle()));
+        }
+        else
+        {
+            StatusSetText(FormatString("Pie Menu [@]: @ | Release trigger to execute"_s, m_activeProfile->name, slot.GetEffectiveTitle()));
+        }
     }
     else
     {
@@ -694,8 +875,13 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
             return 0;
         }
 
-        case WM_LBUTTONUP:
         case WM_LBUTTONDOWN:
+        {
+            // Do not commit on mouse down; wait for WM_LBUTTONUP so click executes once
+            return 0;
+        }
+
+        case WM_LBUTTONUP:
         {
             if (m_active)
             {
@@ -709,7 +895,14 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
         {
             if (m_active)
             {
-                CancelAndClose();
+                if (!m_profileStack.IsEmpty())
+                {
+                    NavigateBack();
+                }
+                else
+                {
+                    CancelAndClose();
+                }
             }
             return 0;
         }
@@ -731,10 +924,29 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
             {
                 SyncKeysFromAsync();
 
-                if (!IsTriggerHeld())
+                if (!m_pinnedOpen && !IsTriggerHeld())
                 {
                     CommitAndClose();
                     return 0;
+                }
+
+                // Check auto-expand submenu on hover
+                if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+                {
+                    const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+                    if (slot.enabled && slot.IsSubMenu() && m_hoverStartTick > 0)
+                    {
+                        UInt32 elapsed = (UInt32)GetTickCount() - m_hoverStartTick;
+                        if (elapsed >= 240)
+                        {
+                            PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
+                            if (sub && CanNavigateTo(sub))
+                            {
+                                NavigateToSubmenu(sub);
+                                return 0;
+                            }
+                        }
+                    }
                 }
 
                 POINT pt;
@@ -872,6 +1084,7 @@ void PieMenuOverlay::RenderOverlay()
 
             // Background color
             Gdiplus::Color bgCol;
+            Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
             if (isHovered)
             {
                 BYTE r = (BYTE)LocalClampInt((int)(35 + slot.accentColor.x * 65.0), 0, 255);
@@ -879,7 +1092,7 @@ void PieMenuOverlay::RenderOverlay()
                 BYTE b = (BYTE)LocalClampInt((int)(50 + slot.accentColor.z * 65.0), 0, 255);
                 bgCol = Gdiplus::Color(245, r, gr, b);
             }
-            else if (slot.commandId > 0)
+            else if (hasAction)
             {
                 BYTE r = (BYTE)LocalClampInt((int)(26 + slot.accentColor.x * 20.0), 0, 255);
                 BYTE gr = (BYTE)LocalClampInt((int)(28 + slot.accentColor.y * 20.0), 0, 255);
@@ -908,7 +1121,7 @@ void PieMenuOverlay::RenderOverlay()
                 Gdiplus::SolidBrush stripBrush(Gdiplus::Color(255, ar, ag, ab));
                 g.FillPath(&stripBrush, &stripPath);
             }
-            else if (slot.commandId > 0)
+            else if (hasAction)
             {
                 float stripW = 3.0f * radiusScale;
                 Gdiplus::GraphicsPath stripPath;
@@ -933,7 +1146,7 @@ void PieMenuOverlay::RenderOverlay()
                 borderCol = Gdiplus::Color(255, ar, ag, ab);
                 borderWidth = 2.0f;
             }
-            else if (slot.commandId > 0)
+            else if (hasAction)
             {
                 BYTE ar = (BYTE)(Clamp01(slot.accentColor.x * 0.75) * 255.0);
                 BYTE ag = (BYTE)(Clamp01(slot.accentColor.y * 0.75) * 255.0);
@@ -975,14 +1188,17 @@ void PieMenuOverlay::RenderOverlay()
             float ty = cy + std::sin(midRad) * rText;
 
             String label = slot.GetEffectiveTitle();
+            if (slot.IsSubMenu())
+                label += " >"_s;
             std::wstring wLabel = ToWString(label);
 
+            Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
             Gdiplus::Color textCol;
             if (isHovered)
             {
                 textCol = Gdiplus::Color(255, 255, 255, 255);
             }
-            else if (slot.commandId > 0)
+            else if (hasAction)
             {
                 BYTE ar = (BYTE)(Clamp01(slot.accentColor.x) * 255.0);
                 BYTE ag = (BYTE)(Clamp01(slot.accentColor.y) * 255.0);
@@ -1004,7 +1220,8 @@ void PieMenuOverlay::RenderOverlay()
 
         // 3. Center Hub (Slot 8 / deadzone)
         const PieSlot& slot8 = m_activeProfile->slots[8];
-        Bool centerConfigured = (slot8.enabled && slot8.commandId > 0);
+        Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
+        Bool isSubMenuMode = !m_profileStack.IsEmpty();
         Bool centerHovered = (m_hoveredSlot == 8);
 
         Gdiplus::GraphicsPath hubPath;
@@ -1013,10 +1230,21 @@ void PieMenuOverlay::RenderOverlay()
         Gdiplus::Color hubBgCol;
         if (centerHovered)
         {
-            BYTE r = (BYTE)LocalClampInt((int)(35 + slot8.accentColor.x * 65.0), 0, 255);
-            BYTE gr = (BYTE)LocalClampInt((int)(40 + slot8.accentColor.y * 65.0), 0, 255);
-            BYTE b = (BYTE)LocalClampInt((int)(50 + slot8.accentColor.z * 65.0), 0, 255);
-            hubBgCol = Gdiplus::Color(245, r, gr, b);
+            if (centerConfigured)
+            {
+                BYTE r = (BYTE)LocalClampInt((int)(35 + slot8.accentColor.x * 65.0), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(40 + slot8.accentColor.y * 65.0), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(50 + slot8.accentColor.z * 65.0), 0, 255);
+                hubBgCol = Gdiplus::Color(245, r, gr, b);
+            }
+            else if (isSubMenuMode)
+            {
+                hubBgCol = Gdiplus::Color(245, 55, 65, 80);
+            }
+            else
+            {
+                hubBgCol = Gdiplus::Color(245, 45, 50, 60);
+            }
         }
         else if (centerConfigured)
         {
@@ -1024,6 +1252,10 @@ void PieMenuOverlay::RenderOverlay()
             BYTE gr = (BYTE)LocalClampInt((int)(28 + slot8.accentColor.y * 25.0), 0, 255);
             BYTE b = (BYTE)LocalClampInt((int)(36 + slot8.accentColor.z * 25.0), 0, 255);
             hubBgCol = Gdiplus::Color(230, r, gr, b);
+        }
+        else if (isSubMenuMode)
+        {
+            hubBgCol = Gdiplus::Color(230, 36, 42, 52);
         }
         else
         {
@@ -1036,10 +1268,21 @@ void PieMenuOverlay::RenderOverlay()
         Gdiplus::Color hubBorderCol;
         if (centerHovered)
         {
-            BYTE ar = (BYTE)(Clamp01(slot8.accentColor.x) * 255.0);
-            BYTE ag = (BYTE)(Clamp01(slot8.accentColor.y) * 255.0);
-            BYTE ab = (BYTE)(Clamp01(slot8.accentColor.z) * 255.0);
-            hubBorderCol = Gdiplus::Color(255, ar, ag, ab);
+            if (centerConfigured)
+            {
+                BYTE ar = (BYTE)(Clamp01(slot8.accentColor.x) * 255.0);
+                BYTE ag = (BYTE)(Clamp01(slot8.accentColor.y) * 255.0);
+                BYTE ab = (BYTE)(Clamp01(slot8.accentColor.z) * 255.0);
+                hubBorderCol = Gdiplus::Color(255, ar, ag, ab);
+            }
+            else if (isSubMenuMode)
+            {
+                hubBorderCol = Gdiplus::Color(255, 130, 180, 240);
+            }
+            else
+            {
+                hubBorderCol = Gdiplus::Color(220, 120, 130, 145);
+            }
         }
         else if (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && m_hoveredSlot < count)
         {
@@ -1051,6 +1294,10 @@ void PieMenuOverlay::RenderOverlay()
             const Vector& cCol = slot8.accentColor * 0.65;
             hubBorderCol = Gdiplus::Color(200, (BYTE)(cCol.x * 255), (BYTE)(cCol.y * 255), (BYTE)(cCol.z * 255));
         }
+        else if (isSubMenuMode)
+        {
+            hubBorderCol = Gdiplus::Color(200, 90, 120, 160);
+        }
         else
         {
             hubBorderCol = Gdiplus::Color(180, 80, 88, 100);
@@ -1061,10 +1308,21 @@ void PieMenuOverlay::RenderOverlay()
 
         if (centerConfigured)
         {
-            std::wstring wCTitle = ToWString(slot8.GetEffectiveTitle());
+            String cText = slot8.GetEffectiveTitle();
+            if (slot8.IsSubMenu())
+                cText += " >"_s;
+            std::wstring wCTitle = ToWString(cText);
             Gdiplus::Color cTextCol = centerHovered ? Gdiplus::Color(255, 255, 255, 255) :
                 Gdiplus::Color(255, (BYTE)(slot8.accentColor.x * 255), (BYTE)(slot8.accentColor.y * 255), (BYTE)(slot8.accentColor.z * 255));
             Gdiplus::Font cFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+            Gdiplus::SolidBrush cTextBrush(cTextCol);
+            g.DrawString(wCTitle.c_str(), -1, &cFont, Gdiplus::PointF(cx, cy), &format, &cTextBrush);
+        }
+        else if (isSubMenuMode)
+        {
+            std::wstring wCTitle = L"◀ Back";
+            Gdiplus::Color cTextCol = centerHovered ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(240, 160, 180, 210);
+            Gdiplus::Font cFont(L"Segoe UI", 7.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
             Gdiplus::SolidBrush cTextBrush(cTextCol);
             g.DrawString(wCTitle.c_str(), -1, &cFont, Gdiplus::PointF(cx, cy), &format, &cTextBrush);
         }
@@ -1110,10 +1368,21 @@ void PieMenuOverlay::RenderOverlay()
             g.FillEllipse(&dotBrush, pX - 3.5f, pY - 3.5f, 7.0f, 7.0f);
         }
 
-        // 5. Context badge at top: e.g. "[Polygons]"
+        // 5. Context badge at top with breadcrumbs: e.g. "[Main > Submenu]"
         if (m_activeProfile->showTitle && m_activeProfile->name.IsPopulated())
         {
-            std::wstring wBadge = L"[" + ToWString(m_activeProfile->name) + L"]";
+            std::wstring wBadge = L"[";
+            for (const PieProfile* parentProf : m_profileStack)
+            {
+                if (parentProf)
+                {
+                    wBadge += ToWString(parentProf->name);
+                    wBadge += L" > ";
+                }
+            }
+            wBadge += ToWString(m_activeProfile->name);
+            wBadge += L"]";
+
             Gdiplus::Font bFont(L"Segoe UI", 8.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
             Gdiplus::SolidBrush bShadow(Gdiplus::Color(180, 0, 0, 0));
             Gdiplus::SolidBrush bBrush(Gdiplus::Color(220, 130, 180, 230));

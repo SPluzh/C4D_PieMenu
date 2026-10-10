@@ -29,6 +29,8 @@ enum
     IDC_GROUP_INSPECTOR,
     IDC_INSPECTOR_SLOT_TITLE,
     IDC_INSPECTOR_ENABLED,
+    IDC_INSPECTOR_SUBMENU_COMBO,
+    IDC_INSPECTOR_GOTO_SUBMENU,
     IDC_INSPECTOR_CMD_ID,
     IDC_INSPECTOR_CMD_NAME,
     IDC_INSPECTOR_COLOR_FIELD,
@@ -41,12 +43,21 @@ enum
     IDC_BTN_RESET,
     IDC_BTN_CLOSE,
 
-    // Left commands library panel
+    // Left panel and tabs
     IDC_GROUP_CMD_PANEL,
+    IDC_LEFT_TAB_GROUP,
+    IDC_TAB_COMMANDS,
     IDC_CMD_SEARCH,
     IDC_CMD_COUNT,
     IDC_CMD_BTN_ASSIGN,
     IDC_CMD_TREEVIEW,
+
+    // Left panel submenu tab
+    IDC_TAB_SUBMENUS,
+    IDC_SUBMENU_COUNT,
+    IDC_SUBMENU_BTN_ASSIGN,
+    IDC_SUBMENU_BTN_NEW,
+    IDC_SUBMENU_TREEVIEW,
 
     // Menu Hotkey settings
     IDC_GROUP_MENU_HOTKEY,
@@ -315,6 +326,183 @@ Int32 CommandListTreeView::DoubleClick(void* root, void* userdata, void* obj, In
 }
 
 // ============================================================================
+// SUBMENU LIST TREE VIEW FUNCTIONS IMPLEMENTATION
+// ============================================================================
+
+void* SubmenuListTreeView::GetFirst(void* root, void* userdata)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    if (!dlg)
+        return nullptr;
+    const maxon::BaseArray<SubmenuItem>& list = dlg->GetAllSubmenus();
+    return (list.GetCount() > 0) ? const_cast<SubmenuItem*>(&list[0]) : nullptr;
+}
+
+void* SubmenuListTreeView::GetDown(void* root, void* userdata, void* obj)
+{
+    return nullptr;
+}
+
+void* SubmenuListTreeView::GetNext(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    if (!dlg || !item)
+        return nullptr;
+
+    const maxon::BaseArray<SubmenuItem>& list = dlg->GetAllSubmenus();
+    for (Int32 i = 0; i < (Int32)list.GetCount(); ++i)
+    {
+        if (&list[i] == item && (i + 1) < (Int32)list.GetCount())
+            return const_cast<SubmenuItem*>(&list[i + 1]);
+    }
+    return nullptr;
+}
+
+void* SubmenuListTreeView::GetPred(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    if (!dlg || !item)
+        return nullptr;
+
+    const maxon::BaseArray<SubmenuItem>& list = dlg->GetAllSubmenus();
+    for (Int32 i = 0; i < (Int32)list.GetCount(); ++i)
+    {
+        if (&list[i] == item && i > 0)
+            return const_cast<SubmenuItem*>(&list[i - 1]);
+    }
+    return nullptr;
+}
+
+Bool SubmenuListTreeView::IsSelected(void* root, void* userdata, void* obj)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    return dlg ? (dlg->GetSelectedSubmenu() == obj) : false;
+}
+
+void SubmenuListTreeView::Select(void* root, void* userdata, void* obj, Int32 mode)
+{
+    PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+    if (!dlg)
+        return;
+
+    if (mode == SELECTION_NEW || mode == SELECTION_ADD)
+    {
+        dlg->SetSelectedSubmenu(static_cast<SubmenuItem*>(obj));
+    }
+    else if (mode == SELECTION_SUB)
+    {
+        if (dlg->GetSelectedSubmenu() == obj)
+            dlg->SetSelectedSubmenu(nullptr);
+    }
+}
+
+Bool SubmenuListTreeView::IsOpened(void* root, void* userdata, void* obj)
+{
+    return false;
+}
+
+String SubmenuListTreeView::GetName(void* root, void* userdata, void* obj)
+{
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    return item ? item->name : String();
+}
+
+Int SubmenuListTreeView::GetId(void* root, void* userdata, void* obj)
+{
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    return item ? (Int)item->index : 0;
+}
+
+Int32 SubmenuListTreeView::GetDragType(void* root, void* userdata, void* obj)
+{
+    return DRAGTYPE_PIEMENU_SUBMENU;
+}
+
+Int32 SubmenuListTreeView::DragStart(void* root, void* userdata, void* obj)
+{
+    return TREEVIEW_DRAGSTART_ALLOW | TREEVIEW_DRAGSTART_SELECT;
+}
+
+void SubmenuListTreeView::GenerateDragData(void* root, void* userdata, void* obj, void** dragdata)
+{
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    if (item && dragdata)
+    {
+        *dragdata = obj;
+    }
+}
+
+Int32 SubmenuListTreeView::AcceptDragObject(void* root, void* userdata, void* obj, Int32 dragtype, void* dragobject, Bool& bAllowCopy)
+{
+    return 0;
+}
+
+Int32 SubmenuListTreeView::GetColumnWidth(void* root, void* userdata, void* obj, Int32 col, GeUserArea* area)
+{
+    if (col == 'tree')
+        return LV_COLUMN_WIDTH_FIT;
+    if (col == 'ctxt')
+        return 80;
+    if (col == 'slot')
+        return 50;
+    return LV_COLUMN_WIDTH_FIT;
+}
+
+Int32 SubmenuListTreeView::GetHeaderColumnWidth(void* root, void* userdata, Int32 col, GeUserArea* area)
+{
+    if (col == 'tree')
+        return LV_COLUMN_WIDTH_FIT;
+    if (col == 'ctxt')
+        return 80;
+    if (col == 'slot')
+        return 50;
+    return LV_COLUMN_WIDTH_FIT;
+}
+
+Int32 SubmenuListTreeView::GetLineHeight(void* root, void* userdata, void* obj, Int32 col, GeUserArea* area)
+{
+    return 22;
+}
+
+void SubmenuListTreeView::DrawCell(void* root, void* userdata, void* obj, Int32 col, DrawInfo* drawinfo, const GeData& bgColor)
+{
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    if (!item || !drawinfo || !drawinfo->frame)
+        return;
+
+    if (col == 'ctxt')
+    {
+        String ctxStr = GetContextShortName(item->context);
+        drawinfo->frame->DrawSetTextCol(Vector(0.55, 0.70, 0.90), COLOR_TRANS);
+        Int32 th = drawinfo->frame->DrawGetFontHeight();
+        Int32 ty = drawinfo->ypos + (drawinfo->height - th) / 2;
+        drawinfo->frame->DrawText(ctxStr, drawinfo->xpos + 4, ty);
+    }
+    else if (col == 'slot')
+    {
+        String scStr = FormatString("@s"_s, item->slotCount);
+        drawinfo->frame->DrawSetTextCol(Vector(0.50, 0.53, 0.58), COLOR_TRANS);
+        Int32 th = drawinfo->frame->DrawGetFontHeight();
+        Int32 ty = drawinfo->ypos + (drawinfo->height - th) / 2;
+        drawinfo->frame->DrawText(scStr, drawinfo->xpos + 4, ty);
+    }
+}
+
+Int32 SubmenuListTreeView::DoubleClick(void* root, void* userdata, void* obj, Int32 col, MouseInfo* mouseinfo)
+{
+    SubmenuItem* item = static_cast<SubmenuItem*>(obj);
+    if (item && userdata)
+    {
+        PieMenuEditorDialog* dlg = static_cast<PieMenuEditorDialog*>(userdata);
+        dlg->AssignSubmenuToSelectedSlot(item->name);
+        return true;
+    }
+    return false;
+}
+
+// ============================================================================
 // PIE MENU EDITOR DIALOG IMPLEMENTATION
 // ============================================================================
 
@@ -328,16 +516,22 @@ Bool PieMenuEditorDialog::CreateLayout()
     s_activeDialog = this;
     SetTitle("Pie Menu Configuration"_s);
 
-    // Main 2-column layout (Left: Commands Library, Right: Pie Menu & Inspector)
+    // Main 2-column layout (Left: Commands/Submenus Library, Right: Pie Menu & Inspector)
     GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 2, 0, ""_s, 0);
     GroupBorderSpace(10, 8, 10, 4);
     GroupSpace(10, 0);
 
     // =============================================================
-    // LEFT COLUMN: Commands Library & Search
+    // LEFT COLUMN: Tabs for Commands & Submenus
     // =============================================================
-    GroupBegin(IDC_GROUP_CMD_PANEL, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, "Commands"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(8, 8, 8, 8);
+    GroupBegin(IDC_GROUP_CMD_PANEL, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, ""_s, BORDER_GROUP_IN);
+    GroupBorderSpace(4, 4, 4, 4);
+
+    TabGroupBegin(IDC_LEFT_TAB_GROUP, BFH_SCALEFIT | BFV_SCALEFIT, TAB_TABS);
+
+    // TAB 1: Commands Library & Search
+    GroupBegin(IDC_TAB_COMMANDS, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, "C4D Commands"_s, 0);
+    GroupBorderSpace(6, 6, 6, 6);
     GroupSpace(0, 6);
 
     // Search bar row
@@ -365,10 +559,38 @@ Bool PieMenuEditorDialog::CreateLayout()
     treedata.SetBool(TREEVIEW_DRAG_START_REQUIRES_MOVEMENT, true);
 
     m_treeGui = (TreeViewCustomGui*)AddCustomGui(IDC_CMD_TREEVIEW, CUSTOMGUI_TREEVIEW, String(), BFH_SCALEFIT | BFV_SCALEFIT, 300, 400, treedata);
+    AddStaticText(0, BFH_SCALEFIT, 0, 0, "Drag command to slot or double-click to assign"_s, 0);
 
-    // Bottom hint
-    AddStaticText(0, BFH_SCALEFIT, 0, 0, "Drag item to slot or double-click to assign"_s, 0);
+    GroupEnd(); // End IDC_TAB_COMMANDS
 
+    // TAB 2: Created Menus (Submenus)
+    GroupBegin(IDC_TAB_SUBMENUS, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, "Submenus"_s, 0);
+    GroupBorderSpace(6, 6, 6, 6);
+    GroupSpace(0, 6);
+
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    AddStaticText(IDC_SUBMENU_COUNT, BFH_SCALEFIT, 0, 0, "0 submenus available"_s, 0);
+    AddButton(IDC_SUBMENU_BTN_ASSIGN, BFH_RIGHT, 0, 0, "Assign as Submenu ->"_s);
+    AddButton(IDC_SUBMENU_BTN_NEW, BFH_RIGHT, 0, 0, "+ New Menu"_s);
+    GroupEnd();
+
+    BaseContainer subtreedata;
+    subtreedata.SetBool(TREEVIEW_BORDER, true);
+    subtreedata.SetBool(TREEVIEW_HAS_HEADER, true);
+    subtreedata.SetBool(TREEVIEW_HIDE_LINES, true);
+    subtreedata.SetBool(TREEVIEW_FIXED_LAYOUT, true);
+    subtreedata.SetBool(TREEVIEW_ALTERNATE_BG, true);
+    subtreedata.SetBool(TREEVIEW_NO_MULTISELECT, true);
+    subtreedata.SetBool(TREEVIEW_CURSORKEYS, true);
+    subtreedata.SetBool(TREEVIEW_RESIZE_HEADER, true);
+    subtreedata.SetBool(TREEVIEW_DRAG_START_REQUIRES_MOVEMENT, true);
+
+    m_submenuTreeGui = (TreeViewCustomGui*)AddCustomGui(IDC_SUBMENU_TREEVIEW, CUSTOMGUI_TREEVIEW, String(), BFH_SCALEFIT | BFV_SCALEFIT, 300, 400, subtreedata);
+    AddStaticText(0, BFH_SCALEFIT, 0, 0, "Drag menu to slot or double-click to link as submenu"_s, 0);
+
+    GroupEnd(); // End IDC_TAB_SUBMENUS
+
+    GroupEnd(); // End IDC_LEFT_TAB_GROUP
     GroupEnd(); // End IDC_GROUP_CMD_PANEL
 
     // =============================================================
@@ -448,6 +670,13 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Enabled:"_s, 0);
     AddCheckbox(IDC_INSPECTOR_ENABLED, BFH_LEFT, 0, 0, "Slot Active in Menu"_s);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Submenu Link:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
+    AddComboBox(IDC_INSPECTOR_SUBMENU_COMBO, BFH_SCALEFIT, 150, 0);
+    AddButton(IDC_INSPECTOR_GOTO_SUBMENU, BFH_LEFT, 80, 0, "Edit Menu ->"_s);
+    GroupEnd();
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Custom Label:"_s, 0);
     GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
@@ -656,11 +885,82 @@ void PieMenuEditorDialog::AssignCommandToSelectedSlot(Int32 cmdId)
         sel = 0;
 
     prof->slots[sel].commandId = cmdId;
+    prof->slots[sel].subMenuName = ""_s;
     prof->slots[sel].customLabel = GetCommandName(cmdId);
     prof->slots[sel].enabled = true;
 
     UpdateInspector();
     m_userArea.Redraw();
+}
+
+void PieMenuEditorDialog::AssignSubmenuToSelectedSlot(const maxon::String& subMenuName)
+{
+    if (subMenuName.IsEmpty())
+        return;
+
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+    if (!prof)
+        return;
+
+    Int32 sel = m_userArea.GetSelectedSlot();
+    if (sel < 0 || sel > 8)
+        sel = 0;
+
+    prof->slots[sel].subMenuName = subMenuName;
+    prof->slots[sel].commandId = NOTOK;
+    prof->slots[sel].customLabel = subMenuName;
+    prof->slots[sel].enabled = true;
+
+    UpdateInspector();
+    m_userArea.Redraw();
+}
+
+void PieMenuEditorDialog::PopulateAllSubmenus()
+{
+    m_allSubmenus.Reset();
+    PieProfileManager& mgr = PieProfileManager::Get();
+    Int32 activeIdx = m_userArea.GetActiveProfileIndex();
+
+    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+    {
+        if (i == activeIdx)
+            continue; // Cannot add active menu to itself
+
+        PieProfile* prof = mgr.GetProfile(i);
+        if (prof)
+        {
+            SubmenuItem item;
+            item.index = i;
+            item.name = prof->name;
+            item.context = prof->context;
+            item.slotCount = prof->slotCount;
+            item.hotkeyStr = prof->hotkey.GetDisplayString();
+            m_allSubmenus.Append(item) iferr_ignore("Append");
+        }
+    }
+}
+
+void PieMenuEditorDialog::RefreshSubmenuList()
+{
+    PopulateAllSubmenus();
+
+    if (m_submenuTreeGui)
+    {
+        m_submenuTreeGui->Refresh();
+    }
+
+    String countStr = FormatString("@ menu(s) available"_s, (Int32)m_allSubmenus.GetCount());
+    SetString(IDC_SUBMENU_COUNT, countStr);
+
+    // Populate Inspector submenu dropdown
+    FreeChildren(IDC_INSPECTOR_SUBMENU_COMBO);
+    AddChild(IDC_INSPECTOR_SUBMENU_COMBO, 0, "-- None (Execute Command) --"_s);
+    for (Int32 i = 0; i < (Int32)m_allSubmenus.GetCount(); ++i)
+    {
+        String title = FormatString("Submenu: @"_s, m_allSubmenus[i].name);
+        AddChild(IDC_INSPECTOR_SUBMENU_COMBO, i + 1, title);
+    }
 }
 
 Bool PieMenuEditorDialog::InitValues()
@@ -709,6 +1009,21 @@ Bool PieMenuEditorDialog::InitValues()
 
         m_treeGui->SetRoot(this, &m_treeFunctions, this);
         m_treeGui->Refresh();
+    }
+
+    if (m_submenuTreeGui)
+    {
+        BaseContainer sublayout;
+        sublayout.SetInt32('tree', LV_TREE);
+        sublayout.SetInt32('ctxt', LV_USER);
+        sublayout.SetInt32('slot', LV_USER);
+        m_submenuTreeGui->SetLayout(3, sublayout);
+        m_submenuTreeGui->SetHeaderText('tree', "Menu Name"_s);
+        m_submenuTreeGui->SetHeaderText('ctxt', "Context"_s);
+        m_submenuTreeGui->SetHeaderText('slot', "Slots"_s);
+
+        m_submenuTreeGui->SetRoot(this, &m_submenuTreeFunctions, this);
+        m_submenuTreeGui->Refresh();
     }
 
     RefreshProfileComboList();
@@ -769,6 +1084,7 @@ void PieMenuEditorDialog::SelectProfile(Int32 index)
     SetInt32(IDC_PROFILE_COMBO, index);
     UpdateMenuSettingsUI();
     UpdateHotkeyUI();
+    RefreshSubmenuList();
     UpdateInspector();
     m_userArea.Redraw();
 }
@@ -916,7 +1232,25 @@ void PieMenuEditorDialog::UpdateInspector()
 
     const PieSlot& slot = prof->slots[sel];
     SetBool(IDC_INSPECTOR_ENABLED, slot.enabled);
+
+    // Update Submenu combo selection
+    Int32 subComboSel = 0;
+    if (slot.IsSubMenu())
+    {
+        for (Int32 i = 0; i < (Int32)m_allSubmenus.GetCount(); ++i)
+        {
+            if (m_allSubmenus[i].name == slot.subMenuName)
+            {
+                subComboSel = i + 1;
+                break;
+            }
+        }
+    }
+    SetInt32(IDC_INSPECTOR_SUBMENU_COMBO, subComboSel);
+    Enable(IDC_INSPECTOR_GOTO_SUBMENU, slot.IsSubMenu());
+
     SetInt32(IDC_INSPECTOR_CMD_ID, slot.commandId > 0 ? slot.commandId : 0);
+    Enable(IDC_INSPECTOR_CMD_ID, !slot.IsSubMenu());
     SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
     SetColorField(IDC_INSPECTOR_COLOR_FIELD, slot.accentColor, 1.0, 1.0, 0);
 }
@@ -937,14 +1271,44 @@ void PieMenuEditorDialog::ApplyInspectorChanges()
     if (GetBool(IDC_INSPECTOR_ENABLED, en))
         slot.enabled = en;
 
-    Int32 newCmdId = 0;
-    if (GetInt32(IDC_INSPECTOR_CMD_ID, newCmdId))
+    Int32 subSel = 0;
+    if (GetInt32(IDC_INSPECTOR_SUBMENU_COMBO, subSel))
     {
-        slot.commandId = newCmdId > 0 ? newCmdId : NOTOK;
-        if (slot.commandId > 0 && !slot.customLabel.IsPopulated())
+        if (subSel == 0 && slot.IsSubMenu())
         {
-            slot.customLabel = GetCommandName(slot.commandId);
-            SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
+            slot.subMenuName = ""_s;
+            Enable(IDC_INSPECTOR_CMD_ID, true);
+        }
+        else if (subSel > 0 && (subSel - 1) < (Int32)m_allSubmenus.GetCount())
+        {
+            slot.subMenuName = m_allSubmenus[subSel - 1].name;
+            slot.commandId = NOTOK;
+            SetInt32(IDC_INSPECTOR_CMD_ID, 0);
+            Enable(IDC_INSPECTOR_CMD_ID, false);
+            Enable(IDC_INSPECTOR_GOTO_SUBMENU, true);
+            if (!slot.customLabel.IsPopulated() || slot.customLabel == GetCommandName(slot.commandId))
+            {
+                slot.customLabel = slot.subMenuName;
+                SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
+            }
+        }
+    }
+
+    if (!slot.IsSubMenu())
+    {
+        Int32 newCmdId = 0;
+        if (GetInt32(IDC_INSPECTOR_CMD_ID, newCmdId))
+        {
+            if (newCmdId > 0)
+            {
+                slot.commandId = newCmdId;
+                slot.subMenuName = ""_s;
+                if (!slot.customLabel.IsPopulated())
+                {
+                    slot.customLabel = GetCommandName(slot.commandId);
+                    SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
+                }
+            }
         }
     }
 
@@ -1129,6 +1493,52 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             break;
         }
 
+        case IDC_SUBMENU_BTN_ASSIGN:
+        {
+            if (m_selectedSubmenu)
+            {
+                AssignSubmenuToSelectedSlot(m_selectedSubmenu->name);
+            }
+            break;
+        }
+
+        case IDC_SUBMENU_BTN_NEW:
+        {
+            Int32 newIdx = mgr.AddProfile();
+            RefreshProfileComboList();
+            SelectProfile(newIdx);
+            break;
+        }
+
+        case IDC_INSPECTOR_SUBMENU_COMBO:
+        {
+            ApplyInspectorChanges();
+            UpdateInspector();
+            break;
+        }
+
+        case IDC_INSPECTOR_GOTO_SUBMENU:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && sel <= 8 && prof->slots[sel].IsSubMenu())
+                {
+                    for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
+                    {
+                        PieProfile* p = mgr.GetProfile(i);
+                        if (p && p->name == prof->slots[sel].subMenuName)
+                        {
+                            SelectProfile(i);
+                            break;
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
         case IDC_INSPECTOR_ENABLED:
         case IDC_INSPECTOR_CMD_ID:
         case IDC_INSPECTOR_CMD_NAME:
@@ -1166,6 +1576,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 if (sel >= 0 && sel <= 8)
                 {
                     prof->slots[sel].commandId = NOTOK;
+                    prof->slots[sel].subMenuName = ""_s;
                     prof->slots[sel].customLabel = ""_s;
                     UpdateInspector();
                     m_userArea.Redraw();

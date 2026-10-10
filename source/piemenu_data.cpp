@@ -10,6 +10,7 @@ namespace cinema
 
 static const Int32 PIE_CONFIG_MAGIC_V2 = 0x50494532; // "PIE2"
 static const Int32 PIE_CONFIG_MAGIC_V3 = 0x50494533; // "PIE3"
+static const Int32 PIE_CONFIG_MAGIC_V4 = 0x50494534; // "PIE4"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -209,6 +210,9 @@ maxon::String PieSlot::GetEffectiveTitle() const
 {
     if (customLabel.IsPopulated())
         return customLabel;
+
+    if (IsSubMenu())
+        return subMenuName;
 
     if (commandId > 0)
     {
@@ -675,6 +679,8 @@ static JsonValue ProfileToJson(const PieProfile& prof)
         jSlot.Set("index", (int64_t)s);
         jSlot.Set("position", GetSlotPositionName(prof.slotCount, s));
         jSlot.Set("commandId", (int64_t)slot.commandId);
+        if (slot.subMenuName.IsPopulated())
+            jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
         if (slot.commandId > 0)
         {
             String cname = GetCommandName(slot.commandId);
@@ -742,6 +748,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     for (int s = 0; s < 9; ++s)
     {
         outProf.slots[s].commandId = NOTOK;
+        outProf.slots[s].subMenuName = ""_s;
         outProf.slots[s].customLabel = ""_s;
         outProf.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
         outProf.slots[s].enabled = true;
@@ -758,6 +765,8 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
             if (idx >= 0 && idx < 9)
             {
                 outProf.slots[idx].commandId = (Int32)jSlot.GetInt("commandId", NOTOK);
+                std::string sub = jSlot.GetString("subMenuName", "");
+                outProf.slots[idx].subMenuName = StdStringToC4DString(sub);
                 std::string lbl = jSlot.GetString("customLabel", "");
                 outProf.slots[idx].customLabel = StdStringToC4DString(lbl);
                 outProf.slots[idx].enabled = jSlot.GetBool("enabled", true);
@@ -790,7 +799,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V3)
+    if (firstVal == PIE_CONFIG_MAGIC_V4)
+    {
+        version = 4;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V3)
     {
         version = 3;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
@@ -828,6 +843,14 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             file->ReadString(&prof.slots[s].customLabel);
             file->ReadVector64(&prof.slots[s].accentColor);
             file->ReadBool(&prof.slots[s].enabled);
+            if (version >= 4)
+            {
+                file->ReadString(&prof.slots[s].subMenuName);
+            }
+            else
+            {
+                prof.slots[s].subMenuName = ""_s;
+            }
         }
 
         if (version >= 2)
@@ -951,7 +974,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1040,7 +1063,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Bool dummyCtrlShift = false;
@@ -1153,8 +1176,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V3 header to denote per-profile showTitle and hotkey format
-    file->WriteInt32(PIE_CONFIG_MAGIC_V3);
+    // Write magic V4 header to denote subMenuName and per-profile hotkey format
+    file->WriteInt32(PIE_CONFIG_MAGIC_V4);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1172,6 +1195,7 @@ Bool PieProfileManager::SaveToFile()
             file->WriteString(prof.slots[s].customLabel);
             file->WriteVector64(prof.slots[s].accentColor);
             file->WriteBool(prof.slots[s].enabled);
+            file->WriteString(prof.slots[s].subMenuName);
         }
 
         file->WriteBool(prof.hotkey.enabled);
@@ -1201,6 +1225,27 @@ PieProfile* PieProfileManager::GetProfile(Int32 index)
 {
     if (index >= 0 && index < (Int32)m_profiles.GetCount())
         return &m_profiles[index];
+    return nullptr;
+}
+
+PieProfile* PieProfileManager::FindProfileByName(const maxon::String& name)
+{
+    if (name.IsEmpty())
+        return nullptr;
+
+    for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+    {
+        if (m_profiles[i].name == name)
+            return &m_profiles[i];
+    }
+
+    String searchName(name);
+    for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+    {
+        if (String(m_profiles[i].name).LexCompare(searchName) == 0)
+            return &m_profiles[i];
+    }
+
     return nullptr;
 }
 
@@ -1252,6 +1297,7 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
     for (Int32 s = 0; s < 9; ++s)
     {
         p.slots[s].commandId = NOTOK;
+        p.slots[s].subMenuName = ""_s;
         p.slots[s].customLabel = ""_s;
         p.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
         p.slots[s].enabled = true;
@@ -1280,7 +1326,21 @@ Bool PieProfileManager::DeleteProfile(Int32 index)
     if (index < 0 || index >= (Int32)m_profiles.GetCount())
         return false;
 
+    maxon::String delName = m_profiles[index].name;
     m_profiles.Erase(index) iferr_ignore("Erase");
+
+    // Clear subMenuName in any slot referencing the deleted profile
+    for (Int32 p = 0; p < (Int32)m_profiles.GetCount(); ++p)
+    {
+        for (Int32 s = 0; s < 9; ++s)
+        {
+            if (m_profiles[p].slots[s].subMenuName == delName)
+            {
+                m_profiles[p].slots[s].subMenuName = ""_s;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -1289,7 +1349,23 @@ Bool PieProfileManager::RenameProfile(Int32 index, const maxon::String& newName)
     if (index < 0 || index >= (Int32)m_profiles.GetCount() || !newName.IsPopulated())
         return false;
 
+    maxon::String oldName = m_profiles[index].name;
     m_profiles[index].name = newName;
+
+    // Update references across all profiles' slots
+    for (Int32 p = 0; p < (Int32)m_profiles.GetCount(); ++p)
+    {
+        for (Int32 s = 0; s < 9; ++s)
+        {
+            if (m_profiles[p].slots[s].subMenuName == oldName)
+            {
+                m_profiles[p].slots[s].subMenuName = newName;
+                if (m_profiles[p].slots[s].customLabel == oldName)
+                    m_profiles[p].slots[s].customLabel = newName;
+            }
+        }
+    }
+
     return true;
 }
 

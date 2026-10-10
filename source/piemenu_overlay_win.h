@@ -22,6 +22,10 @@ public:
     void CommitAndClose();
     void CancelAndClose();
 
+    Bool NavigateToSubmenu(PieProfile* subProfile);
+    Bool NavigateBack();
+    Bool CanNavigateTo(const PieProfile* profile) const;
+
     void CheckTrigger();
     void OnKeyboardHook(UInt32 vkCode, UInt32 msg);
     void SyncKeysFromAsync();
@@ -55,6 +59,11 @@ private:
     Int32       m_currentScreenY = 0;
     Int32       m_hoveredSlot = NOTOK;
     PieProfile* m_activeProfile = nullptr;
+
+    maxon::BaseArray<PieProfile*> m_profileStack;
+    UInt32      m_hoverStartTick = 0;
+    Int32       m_lastHoveredSlot = NOTOK;
+    bool        m_pinnedOpen = false;
 };
 
 } // namespace cinema

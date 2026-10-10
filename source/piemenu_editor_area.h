@@ -26,6 +26,7 @@ public:
 
     Int32 GetSlotUnderCoord(Int32 x, Int32 y) const;
     static Int32 ExtractCommandId(Int32 type, void* object, const BaseContainer& msg);
+    static maxon::String ExtractSubmenuName(Int32 type, void* object, const BaseContainer& msg);
 
     Int32 GetDragSourceSlot() const { return m_dragSourceSlot; }
 

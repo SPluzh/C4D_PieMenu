@@ -74,7 +74,7 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
 
     if (dist < deadzone)
     {
-        if (m_activeProfile->slots[8].enabled && m_activeProfile->slots[8].commandId > 0)
+        if (m_activeProfile->slots[8].enabled && (m_activeProfile->slots[8].commandId > 0 || m_activeProfile->slots[8].IsSubMenu()))
         {
             m_hoveredSlot = 8;
         }
@@ -106,9 +106,21 @@ void PieMenuSceneHook::CommitSelection()
     if (m_hoveredSlot >= 0 && m_hoveredSlot < 9)
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-        if (slot.enabled && slot.commandId > 0)
+        if (slot.enabled)
         {
-            CallCommand(slot.commandId);
+            if (slot.IsSubMenu())
+            {
+                PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
+                if (sub)
+                {
+                    m_activeProfile = sub;
+                    m_hoveredSlot = NOTOK;
+                }
+            }
+            else if (slot.commandId > 0)
+            {
+                CallCommand(slot.commandId);
+            }
         }
     }
 }
@@ -249,12 +261,13 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         Float aStart = startDeg * deg2rad + gapRad;
         Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
+        Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
         Vector bgCol;
         if (isHovered)
         {
             bgCol = Vector(0.14, 0.16, 0.20) + slot.accentColor * 0.22;
         }
-        else if (slot.commandId > 0)
+        else if (hasAction)
         {
             bgCol = Vector(0.10, 0.11, 0.14) + slot.accentColor * 0.06;
         }
@@ -272,7 +285,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
             Vector activeStripCol = slot.accentColor;
             drawAnnularSector(ox, oy, rIn, rIn + 4.5 * radiusScale, aStart, aEnd, activeStripCol, steps);
         }
-        else if (slot.commandId > 0)
+        else if (hasAction)
         {
             Vector activeStripCol = slot.accentColor * 0.6;
             drawAnnularSector(ox, oy, rIn, rIn + 3.0 * radiusScale, aStart, aEnd, activeStripCol, steps);
@@ -295,6 +308,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         Float aStart = startDeg * deg2rad + gapRad;
         Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
 
+        Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
         Vector borderCol;
         Float borderWidth = 1.0;
         if (isHovered)
@@ -302,7 +316,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
             borderCol = slot.accentColor;
             borderWidth = 2.0;
         }
-        else if (slot.commandId > 0)
+        else if (hasAction)
         {
             borderCol = slot.accentColor * 0.65;
             borderWidth = 1.2;
@@ -336,16 +350,19 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         Float ty = oy + std::sin(midRad) * rText;
 
         String labelText = slot.GetEffectiveTitle();
+        if (slot.IsSubMenu())
+            labelText += " >"_s;
         Int32 charCount = labelText.GetLength();
         Int32 textX = (Int32)(tx - (charCount * 6.5) * 0.5);
         Int32 textY = (Int32)(ty - 5.0);
 
+        Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
         Vector textCol;
         if (isHovered)
         {
             textCol = Vector(1.0, 1.0, 1.0);
         }
-        else if (slot.commandId > 0)
+        else if (hasAction)
         {
             textCol = slot.accentColor;
         }
@@ -360,7 +377,7 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
 
     // 4. Center hub (Slot 8 in Pie Menu / deadzone)
     const PieSlot& slot8 = m_activeProfile->slots[8];
-    Bool centerConfigured = (slot8.enabled && slot8.commandId > 0);
+    Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
     Bool centerHovered = (m_hoveredSlot == 8);
 
     Vector hubBgCol;
@@ -389,6 +406,8 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     if (centerConfigured)
     {
         String cTitle = slot8.GetEffectiveTitle();
+        if (slot8.IsSubMenu())
+            cTitle += " >"_s;
         Int32 cLen = cTitle.GetLength();
         bd->SetPen(centerHovered ? Vector(1.0, 1.0, 1.0) : slot8.accentColor);
         bd->DrawHUDText((Int32)(ox - (cLen * 6.5) * 0.5), (Int32)(oy - 5.0), cTitle);

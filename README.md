@@ -20,8 +20,14 @@
   - Optional profile title badge above the menu.
   - **Inactive Slots as Gaps**: Inactive or unassigned slots can appear as clean gaps, keeping your most-used commands clearly separated and easy to hit.
 
+- **Nested Submenus Support**: Any slot (radial or central) can be linked to another created Pie Menu profile:
+  - **Press & Flick into Submenu**: Hovering over a submenu slot for ~240ms expands the submenu centered under your cursor; continue flicking to execute the desired command in one fluid stroke!
+  - **Click Navigation**: Click or release on a submenu slot to pin it open and browse choices.
+  - **Breadcrumbs Badge**: Displays hierarchy at the top (e.g. `[Modeling > Tools > Extrude]`).
+  - **Intuitive Back Navigation**: Inside any submenu, click RMB, press `Backspace`, or click the center hub (`◀ Back`) to return to the parent menu. Esc or RMB at root cancels.
+
 ### 2. Unlimited Context-Aware Profiles
-- **Create Unlimited Menus**: Add as many custom pie menus as you need using the **`+ New Menu`**, **`Duplicate`**, and **`- Delete`** buttons.
+- **Create Unlimited Menus & Submenus**: Add as many custom pie menus as you need using the **`+ New Menu`**, **`Duplicate`**, and **`- Delete`** buttons. Menus can be used standalone or linked as submenus in other menus.
 - **Context-Sensitive Triggering**:
   - **Global**: Accessible across all modes and tools.
   - **Polygons Mode**: Active when working in polygon component mode.
@@ -35,13 +41,16 @@
 - **Smart Conflict Resolution**: If multiple menus share the same hotkey, the plugin dynamically activates the menu that best matches your current document editing context, seamlessly falling back to Global if no mode-specific menu matches.
 
 ### 3. Visual Configuration Dialog (Extensions -> Pie Menu Configuration)
-- **Built-in Command Palette & Search**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name or command ID.
+- **Built-in Command Palette & Submenu Library (2-Tab Left Column)**:
+  - **C4D Commands Tab**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name or command ID.
+  - **Submenus Tab**: Browse all created profiles with item count and context badges. Double-click or drag any menu onto a pie slot to link it as a submenu! Includes `+ New Submenu` and `Assign to Slot` buttons.
 - **Drag & Drop Assignment & Slot Rearrangement**:
-  - Drag commands directly from the command browser onto radial slots or the slot inspector.
+  - Drag commands or submenus directly onto radial slots or the slot inspector.
   - **Drag & Drop Slot Reordering**: Freely click and drag slots directly on the pie canvas to swap or move them to different positions. Hold `Ctrl` while dragging to duplicate a slot.
-  - Double-clicking a command in the library assigns it to the active slot.
-- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
+  - Double-clicking a command or submenu assigns it to the active slot.
+- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
 - **Detailed Slot Inspector**:
+  - **Submenu Link Dropdown**: Select any existing menu to link as a submenu, with an **`Edit Menu ->`** button to jump straight to editing that submenu.
   - Custom Command ID or name.
   - Custom Label overrides.
   - Custom Accent Color picker per slot.
@@ -52,7 +61,7 @@
   - 4 or 8 radial slots.
   - Toggle *Show Menu Title* badge.
 - **Import & Export Settings**:
-  - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files.
+  - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files (includes full submenu hierarchies).
   - **Import Settings...**: Seamlessly load configuration from `.json` or binary `.dat` files with interactive prompt to either Replace all menus or Append/Merge new menus into your current configuration.
 - **Auto-Save & Defaults**:
   - Automatically saves all profile changes when closing the dialog or modifying settings.
@@ -68,8 +77,11 @@
 | **Hold Configured Hotkey** | Instantly opens the radial pie menu under the cursor |
 | **Move Mouse** | Highlights the targeted slot with popout and laser pointer |
 | **Release Hotkey** | Executes the active slot command immediately (**Press & Flick**) |
-| **LMB Click** | Executes the highlighted slot command |
-| **RMB Click or `Esc`** | Cancels and closes the menu without executing |
+| **Hover Submenu Slot (~240ms)** | Expands submenu under cursor; flick into any submenu command |
+| **LMB Click** | Executes command, or pins and opens a submenu slot |
+| **Center Hub (`◀ Back`)** | In submenu: returns to parent menu |
+| **`Backspace` / RMB in Submenu** | Returns back to parent menu |
+| **RMB Click at root or `Esc`** | Cancels and closes the menu without executing |
 
 ---
 

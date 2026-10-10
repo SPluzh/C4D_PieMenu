@@ -22,10 +22,12 @@ enum class PieSlotPos
 struct PieSlot
 {
     Int32         commandId = NOTOK;
+    maxon::String subMenuName; // Name of target submenu profile if this slot opens a submenu
     maxon::String customLabel;
     Vector        accentColor = Vector(0.25, 0.65, 1.0);
     Bool          enabled = true;
 
+    Bool IsSubMenu() const { return subMenuName.IsPopulated(); }
     maxon::String GetEffectiveTitle() const;
     Bool GetIconBitmap(IconData& outIcon) const;
 };
@@ -86,6 +88,7 @@ public:
 
     Int32 GetProfileCount() const;
     PieProfile* GetProfile(Int32 index);
+    PieProfile* FindProfileByName(const maxon::String& name);
     PieProfile* GetActiveProfileForDoc(BaseDocument* doc);
     Int32 GetActiveProfileIndex(BaseDocument* doc);
 
