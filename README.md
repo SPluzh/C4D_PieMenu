@@ -36,8 +36,11 @@
 
 ### 3. Visual Configuration Dialog (Extensions -> Pie Menu Configuration)
 - **Built-in Command Palette & Search**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name or command ID.
-- **Drag & Drop Assignment**: Drag commands directly from the command browser onto radial slots or the slot inspector. Double-clicking a command assigns it to the active slot.
-- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, and gap distribution.
+- **Drag & Drop Assignment & Slot Rearrangement**:
+  - Drag commands directly from the command browser onto radial slots or the slot inspector.
+  - **Drag & Drop Slot Reordering**: Freely click and drag slots directly on the pie canvas to swap or move them to different positions. Hold `Ctrl` while dragging to duplicate a slot.
+  - Double-clicking a command in the library assigns it to the active slot.
+- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, and gap distribution. Dynamic visual swap link and gold highlight during slot dragging.
 - **Detailed Slot Inspector**:
   - Custom Command ID or name.
   - Custom Label overrides.

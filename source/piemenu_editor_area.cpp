@@ -1,6 +1,9 @@
 #include "piemenu_editor_area.h"
+#include "piemenu_ids.h"
+#include "windows_include.h"
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include "c4d_general.h"
 #include "c4d_gui.h"
 
@@ -8,7 +11,7 @@ namespace cinema
 {
 
 PieMenuEditorArea::PieMenuEditorArea()
-    : m_profileIndex(0), m_selectedSlot(0), m_dragHoverSlot(NOTOK)
+    : m_profileIndex(0), m_selectedSlot(0), m_dragHoverSlot(NOTOK), m_dragSourceSlot(NOTOK)
 {
 }
 
@@ -24,6 +27,7 @@ void PieMenuEditorArea::SetActiveProfileIndex(Int32 index)
     m_profileIndex = index;
     m_selectedSlot = 0;
     m_dragHoverSlot = NOTOK;
+    m_dragSourceSlot = NOTOK;
     Redraw();
 }
 
@@ -193,7 +197,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         const PieSlot& slot = prof->slots[i];
         Bool isSelected = (m_selectedSlot == i);
         Bool isDragHover = (m_dragHoverSlot == i);
-        Bool isSelectedOrHovered = (isSelected || isDragHover);
+        Bool isDragSource = (m_dragSourceSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover || isDragSource);
 
         Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
         Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
@@ -206,6 +211,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         if (isDragHover)
         {
             bgCol = Vector(0.24, 0.22, 0.12) + slot.accentColor * 0.25;
+        }
+        else if (isDragSource)
+        {
+            bgCol = Vector(0.18, 0.22, 0.30) + slot.accentColor * 0.20;
         }
         else if (isSelected)
         {
@@ -231,6 +240,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         {
             drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
         }
+        else if (isDragSource)
+        {
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(0.25, 0.70, 1.0), steps);
+        }
         else if (isSelected)
         {
             drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(0.3, 0.85, 1.0), steps);
@@ -247,7 +260,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         const PieSlot& slot = prof->slots[i];
         Bool isSelected = (m_selectedSlot == i);
         Bool isDragHover = (m_dragHoverSlot == i);
-        Bool isSelectedOrHovered = (isSelected || isDragHover);
+        Bool isDragSource = (m_dragSourceSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover || isDragSource);
 
         Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
         Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
@@ -262,6 +276,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         {
             borderCol = Vector(1.0, 0.9, 0.15); // Bright gold drag highlight
             borderWidth = 2.5;
+        }
+        else if (isDragSource)
+        {
+            borderCol = Vector(0.25, 0.70, 1.0); // Electric cyan source highlight
+            borderWidth = 2.2;
         }
         else if (isSelected)
         {
@@ -293,7 +312,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         const PieSlot& slot = prof->slots[i];
         Bool isSelected = (m_selectedSlot == i);
         Bool isDragHover = (m_dragHoverSlot == i);
-        Bool isSelectedOrHovered = (isSelected || isDragHover);
+        Bool isDragSource = (m_dragSourceSlot == i);
+        Bool isSelectedOrHovered = (isSelected || isDragHover || isDragSource);
 
         Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
         Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
@@ -313,7 +333,9 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
 
         Vector textCol;
-        if (isSelected || isDragHover)
+        if (isDragHover)
+            textCol = Vector(1.0, 0.95, 0.3);
+        else if (isDragSource || isSelected)
             textCol = Vector(1.0, 1.0, 1.0);
         else if (!slot.enabled)
             textCol = Vector(0.30, 0.32, 0.35); // Dim ghost text
@@ -322,7 +344,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         else
             textCol = Vector(0.65, 0.68, 0.72);
 
-        if (hasIcon && (slot.enabled || isSelected || isDragHover))
+        if (hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Position icon slightly closer to inner ring, text slightly closer to outer ring
             Float rIcon = rMid - 13.0;
@@ -340,7 +362,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         else
         {
             // Center label inside sector (or omit empty label if disabled and unselected)
-            if (slot.enabled || isSelected || isDragHover || slot.commandId > 0)
+            if (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0)
             {
                 Float lx = cx + std::cos(midRad) * rMid;
                 Float ly = cy + std::sin(midRad) * rMid;
@@ -368,6 +390,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     const PieSlot& slot8 = prof->slots[8];
     Bool isSelected8 = (m_selectedSlot == 8);
     Bool isDragHover8 = (m_dragHoverSlot == 8);
+    Bool isDragSource8 = (m_dragSourceSlot == 8);
 
     Vector hubBgCol;
     Vector hubBorderCol;
@@ -378,6 +401,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         hubBgCol = Vector(0.24, 0.22, 0.12) + slot8.accentColor * 0.25;
         hubBorderCol = Vector(1.0, 0.9, 0.15);
         hubBorderWidth = 2.5;
+    }
+    else if (isDragSource8)
+    {
+        hubBgCol = Vector(0.18, 0.22, 0.30) + slot8.accentColor * 0.20;
+        hubBorderCol = Vector(0.25, 0.70, 1.0);
+        hubBorderWidth = 2.2;
     }
     else if (isSelected8)
     {
@@ -410,7 +439,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     DrawSetPen(hubBorderCol);
     DrawEllipseLine(Vector2d(cx, cy), Vector2d(deadzoneRadius, deadzoneRadius), hubBorderWidth);
 
-    if (slot8.commandId > 0 && (slot8.enabled || isSelected8 || isDragHover8))
+    if (slot8.commandId > 0 && (slot8.enabled || isSelected8 || isDragHover8 || isDragSource8))
     {
         IconData icon;
         if (slot8.GetIconBitmap(icon) && icon.bmp)
@@ -419,7 +448,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else
         {
-            DrawSetTextCol((isSelected8 || isDragHover8) ? Vector(1.0) : slot8.accentColor, COLOR_TRANS);
+            DrawSetTextCol((isSelected8 || isDragHover8 || isDragSource8) ? Vector(1.0) : slot8.accentColor, COLOR_TRANS);
             DrawText("Center"_s, (Int32)cx, (Int32)(cy - 5), DRAWTEXT_HALIGN_CENTER);
         }
     }
@@ -434,7 +463,50 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
     }
 
-    // 6. Context badge at top (if enabled for this menu)
+    // 6. Dynamic visual swap/move connection link between source and target slots
+    auto getSlotCenter = [&](Int32 s) -> Vector2d
+    {
+        if (s == 8)
+            return Vector2d(cx, cy);
+        if (s >= 0 && s < count)
+        {
+            Float midDeg = 270.0 + Float(s) * sliceDeg;
+            Float midRad = midDeg * deg2rad;
+            Float rMid = (baseInnerR + baseOuterR) * 0.5;
+            return Vector2d(cx + std::cos(midRad) * rMid, cy + std::sin(midRad) * rMid);
+        }
+        return Vector2d(cx, cy);
+    };
+
+    if (m_dragSourceSlot != NOTOK && m_dragHoverSlot != NOTOK && m_dragHoverSlot != m_dragSourceSlot)
+    {
+        Vector2d ptSrc = getSlotCenter(m_dragSourceSlot);
+        Vector2d ptDst = getSlotCenter(m_dragHoverSlot);
+
+#if defined(MAXON_TARGET_WINDOWS)
+        bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                        ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                        ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+#else
+        bool ctrlHeld = false;
+#endif
+
+        Vector lineCol = ctrlHeld ? Vector(0.3, 0.95, 0.5) : Vector(1.0, 0.85, 0.2);
+        DrawSetPen(lineCol);
+        DrawLine((Int32)ptSrc.x, (Int32)ptSrc.y, (Int32)ptDst.x, (Int32)ptDst.y, 2.0);
+
+        // Center badge on the connection line
+        Float midX = (ptSrc.x + ptDst.x) * 0.5;
+        Float midY = (ptSrc.y + ptDst.y) * 0.5;
+        DrawSetPen(Vector(0.10, 0.11, 0.14));
+        DrawEllipseFill(Vector2d(midX, midY), Vector2d(10.0, 10.0));
+        DrawSetPen(lineCol);
+        DrawEllipseLine(Vector2d(midX, midY), Vector2d(10.0, 10.0), 1.5);
+        DrawSetTextCol(lineCol, COLOR_TRANS);
+        DrawText(ctrlHeld ? "+"_s : "<>"_s, (Int32)midX, (Int32)(midY - 5.0), DRAWTEXT_HALIGN_CENTER);
+    }
+
+    // 7. Context badge at top (if enabled for this menu)
     if (prof->showTitle && prof->name.IsPopulated())
     {
         String badge = "["_s + prof->name + "]"_s;
@@ -442,9 +514,42 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawText(badge, (Int32)cx, (Int32)(cy - hoverOuterR - 16.0), DRAWTEXT_HALIGN_CENTER);
     }
 
-    // 7. Bottom hint
-    DrawSetTextCol(Vector(0.52, 0.55, 0.60), COLOR_TRANS);
-    DrawText("Click slot to inspect | Drag command here to assign"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+    // 8. Bottom hint
+    if (m_dragSourceSlot != NOTOK && m_dragHoverSlot != NOTOK && m_dragHoverSlot != m_dragSourceSlot)
+    {
+#if defined(MAXON_TARGET_WINDOWS)
+        bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                        ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                        ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+#else
+        bool ctrlHeld = false;
+#endif
+        if (ctrlHeld)
+        {
+            DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
+            DrawText("Release to duplicate slot to target"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
+        else
+        {
+            DrawSetTextCol(Vector(1.0, 0.88, 0.25), COLOR_TRANS);
+            DrawText("Release to swap slots | Hold Ctrl to duplicate"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
+    }
+    else if (m_dragSourceSlot != NOTOK)
+    {
+        DrawSetTextCol(Vector(0.5, 0.8, 1.0), COLOR_TRANS);
+        DrawText("Drag to another slot to move or swap"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+    }
+    else if (m_dragHoverSlot != NOTOK)
+    {
+        DrawSetTextCol(Vector(1.0, 0.88, 0.25), COLOR_TRANS);
+        DrawText("Release to assign command to slot"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+    }
+    else
+    {
+        DrawSetTextCol(Vector(0.52, 0.55, 0.60), COLOR_TRANS);
+        DrawText("Click slot to inspect | Drag slots to rearrange | Drag command to assign"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+    }
 }
 
 Bool PieMenuEditorArea::InputEvent(const BaseContainer& msg)
@@ -469,9 +574,14 @@ Bool PieMenuEditorArea::InputEvent(const BaseContainer& msg)
             SendParentMessage(action);
 
             PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
-            if (prof && prof->slots[slot].commandId > 0)
+            if (prof && (prof->slots[slot].commandId > 0 || prof->slots[slot].customLabel.IsPopulated()))
             {
-                HandleMouseDrag(msg, DRAGTYPE_COMMAND, reinterpret_cast<void*>(static_cast<uintptr_t>(prof->slots[slot].commandId)), 0);
+                m_dragSourceSlot = slot;
+                m_dragHoverSlot = NOTOK;
+                HandleMouseDrag(msg, DRAGTYPE_PIEMENU_SLOT, reinterpret_cast<void*>(static_cast<uintptr_t>(slot)), 0);
+                m_dragSourceSlot = NOTOK;
+                m_dragHoverSlot = NOTOK;
+                Redraw();
             }
             return true;
         }
@@ -495,6 +605,7 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
             if (msg.GetInt32(BFM_DRAG_LOST) || msg.GetInt32(BFM_DRAG_ESC))
             {
                 m_dragHoverSlot = NOTOK;
+                m_dragSourceSlot = NOTOK;
                 Redraw();
                 return GeUserArea::Message(msg, result);
             }
@@ -503,7 +614,64 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
             void* object = nullptr;
             GetDragObject(msg, &type, &object);
 
-            if (type == DRAGTYPE_COMMAND)
+            if (type == DRAGTYPE_PIEMENU_SLOT || (type == DRAGTYPE_COMMAND && m_dragSourceSlot != NOTOK))
+            {
+                if (hoverSlot != m_dragHoverSlot)
+                {
+                    m_dragHoverSlot = hoverSlot;
+                    Redraw();
+                }
+
+                if (msg.GetInt32(BFM_DRAG_FINISHED))
+                {
+                    Int32 srcSlot = m_dragSourceSlot;
+                    if (srcSlot == NOTOK)
+                    {
+                        uintptr_t val = reinterpret_cast<uintptr_t>(object);
+                        if (val <= 8)
+                            srcSlot = (Int32)val;
+                    }
+
+                    PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
+                    if (prof && srcSlot != NOTOK && hoverSlot != NOTOK && srcSlot != hoverSlot)
+                    {
+                        Bool validSrc = (srcSlot >= 0 && (srcSlot < prof->slotCount || srcSlot == 8));
+                        Bool validDst = (hoverSlot >= 0 && (hoverSlot < prof->slotCount || hoverSlot == 8));
+
+                        if (validSrc && validDst)
+                        {
+#if defined(MAXON_TARGET_WINDOWS)
+                            bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                                            ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                                            ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+#else
+                            bool ctrlHeld = false;
+#endif
+                            if (ctrlHeld)
+                            {
+                                prof->slots[hoverSlot] = prof->slots[srcSlot];
+                            }
+                            else
+                            {
+                                std::swap(prof->slots[srcSlot], prof->slots[hoverSlot]);
+                            }
+
+                            m_selectedSlot = hoverSlot;
+
+                            BaseContainer action(BFM_ACTION);
+                            action.SetInt32(BFM_ACTION_ID, GetId());
+                            SendParentMessage(action);
+                        }
+                    }
+
+                    m_dragHoverSlot = NOTOK;
+                    m_dragSourceSlot = NOTOK;
+                    Redraw();
+                }
+
+                return SetDragDestination(MOUSE_POINT_HAND);
+            }
+            else if (type == DRAGTYPE_COMMAND)
             {
                 if (hoverSlot != m_dragHoverSlot)
                 {
