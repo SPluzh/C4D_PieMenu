@@ -4,7 +4,7 @@
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 ### 1. Zero-Latency Viewport HUD & Marking Menu
 - **Hardware-Accelerated Overlay**: Uses a dedicated transparent double-buffered Win32 overlay with GDI+ anti-aliasing, ensuring smooth, instantaneous opening with zero viewport stutter.
@@ -70,7 +70,7 @@
 
 ---
 
-## ⌨️ Controls & Gestures
+## Controls & Gestures
 
 | Action / Gesture | Description |
 |---|---|
@@ -85,7 +85,7 @@
 
 ---
 
-## 📦 Installation
+## Installation
 
 1. Download or extract the release archive (`C4D_PieMenu_v<version>.zip`).
 2. Copy the `C4D_PieMenu` folder corresponding to your Cinema 4D version (`2025` or `2026`) into your Cinema 4D plugins directory:
