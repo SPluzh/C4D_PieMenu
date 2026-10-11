@@ -1,5 +1,7 @@
 # C4D_PieMenu — Radial Marking Menu & Profile Editor for Cinema 4D
 
+![](attachments/C4D_PieMenu.gif)
+
 **C4D_PieMenu** is a fast, highly customizable radial marking menu (pie menu) plugin for Maxon Cinema 4D (supporting Cinema 4D 2025 and 2026). It brings rapid gesture-based tool and command execution directly under your mouse cursor (**Press & Flick**), alongside an interactive graphical profile editor with full **Drag & Drop** command assignment.
 
 ---
@@ -56,7 +58,9 @@
   - Custom Accent Color picker per slot.
   - Enable / Disable slot toggle.
   - One-click *Clear Slot*.
-- **Display & Sizing Controls**:
+- **Display & Sizing Controls (Per-Menu & Global)**:
+  - **Per-Menu Display Style**: Choose between *Icon and Label*, *Icon Only* (minimalist HUD with glowing icons), or *Label Only* (classic text menu) individually for each pie menu profile.
+  - **Per-Menu Icon Size**: Customize icon size in pixels (12px to 64px) individually per menu.
   - Adjustable Outer Radius and Deadzone Radius.
   - 4 or 8 radial slots.
   - Toggle *Show Menu Title* badge.

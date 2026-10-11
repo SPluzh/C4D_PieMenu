@@ -362,6 +362,16 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
 
     // 3. Draw Labels and Icons inside each segment
+    PieProfileManager& mgr = PieProfileManager::Get();
+    PieDisplayMode dispMode = prof ? prof->displayMode : mgr.m_displayMode;
+    Float previewIconSz = prof ? prof->iconSize : mgr.m_iconSize;
+    if (previewIconSz < 12.0)
+        previewIconSz = 24.0;
+    if (previewIconSz > 32.0)
+        previewIconSz = 32.0;
+    else if (previewIconSz < 14.0)
+        previewIconSz = 14.0;
+
     for (Int32 i = 0; i < count; ++i)
     {
         const PieSlot& slot = prof->slots[i];
@@ -378,7 +388,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float midRad = midDeg * deg2rad;
 
         IconData icon;
-        Bool hasIcon = (slot.commandId > 0 && slot.GetIconBitmap(icon) && icon.bmp != nullptr);
+        Bool hasIcon = (dispMode != PieDisplayMode::LabelOnly && slot.commandId > 0 && slot.GetIconBitmap(icon) && icon.bmp != nullptr);
 
         String label = slot.GetEffectiveTitle();
         if (slot.IsSubMenu())
@@ -408,31 +418,40 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         else
             textCol = Vector(0.65, 0.68, 0.72);
 
-        if (hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
+        Bool isVisible = (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0 || slot.IsSubMenu());
+
+        if (dispMode == PieDisplayMode::IconOnly && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
+        {
+            // Only icon: centered at rMid
+            Float ix = cx + std::cos(midRad) * rMid;
+            Float iy = cy + std::sin(midRad) * rMid;
+            Int32 sz = (Int32)previewIconSz;
+            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+        }
+        else if (dispMode == PieDisplayMode::IconAndLabel && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Position icon slightly closer to inner ring, text slightly closer to outer ring
-            Float rIcon = rMid - 13.0;
-            Float rLabel = rMid + 15.0;
+            Float offset = previewIconSz * 0.5 + 2.0;
+            Float rIcon = rMid - offset;
+            Float rLabel = rMid + offset + 2.0;
 
             Float ix = cx + std::cos(midRad) * rIcon;
             Float iy = cy + std::sin(midRad) * rIcon;
-            DrawBitmap(icon.bmp, (Int32)(ix - 10), (Int32)(iy - 10), 20, 20, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+            Int32 sz = (Int32)previewIconSz;
+            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
 
             Float lx = cx + std::cos(midRad) * rLabel;
             Float ly = cy + std::sin(midRad) * rLabel;
             DrawSetTextCol(textCol, COLOR_TRANS);
             DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
         }
-        else
+        else if (isVisible)
         {
-            // Center label inside sector (or omit empty label if disabled and unselected)
-            if (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0 || slot.IsSubMenu())
-            {
-                Float lx = cx + std::cos(midRad) * rMid;
-                Float ly = cy + std::sin(midRad) * rMid;
-                DrawSetTextCol(textCol, COLOR_TRANS);
-                DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
-            }
+            // Center label inside sector (LabelOnly, or slot without icon, or submenu)
+            Float lx = cx + std::cos(midRad) * rMid;
+            Float ly = cy + std::sin(midRad) * rMid;
+            DrawSetTextCol(textCol, COLOR_TRANS);
+            DrawText(label, (Int32)lx, (Int32)(ly - 5), DRAWTEXT_HALIGN_CENTER);
         }
     }
 
@@ -506,9 +525,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     if ((slot8.commandId > 0 || slot8.IsSubMenu()) && (slot8.enabled || isSelected8 || isDragHover8 || isDragSource8))
     {
         IconData icon;
-        if (slot8.commandId > 0 && slot8.GetIconBitmap(icon) && icon.bmp)
+        Bool hasIcon8 = (dispMode != PieDisplayMode::LabelOnly && slot8.commandId > 0 && slot8.GetIconBitmap(icon) && icon.bmp != nullptr);
+
+        if (hasIcon8)
         {
-            DrawBitmap(icon.bmp, (Int32)(cx - 10), (Int32)(cy - 10), 20, 20, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+            Int32 sz = (Int32)previewIconSz;
+            DrawBitmap(icon.bmp, (Int32)(cx - sz * 0.5), (Int32)(cy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
         }
         else
         {

@@ -32,6 +32,13 @@ struct PieSlot
     Bool GetIconBitmap(IconData& outIcon) const;
 };
 
+enum class PieDisplayMode
+{
+    IconAndLabel = 0, // Both icon and label
+    IconOnly     = 1, // Only icon (no label)
+    LabelOnly    = 2  // Only label (no icon)
+};
+
 enum class PieContextMode
 {
     Global = 0,
@@ -67,6 +74,8 @@ struct PieProfile
     Bool           showTitle = true;
     PieSlot        slots[9];      // 0..7 radial, 8 is Center
     PieHotkey      hotkey;
+    Float          iconSize = 24.0;
+    PieDisplayMode displayMode = PieDisplayMode::IconAndLabel;
 
     Float GetSlotAngle(Int32 index) const;
     Int32 AngleToSlot(Float deg, Float dist, Float deadzone) const;
@@ -109,6 +118,8 @@ public:
     Int32 m_triggerKey = 'V';     // Legacy (retained for binary file compatibility)
     Float m_radius = 85.0;
     Float m_deadzone = 26.0;
+    Float m_iconSize = 24.0;
+    PieDisplayMode m_displayMode = PieDisplayMode::IconAndLabel;
 
 private:
     PieProfileManager();

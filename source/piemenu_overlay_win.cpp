@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "c4d_general.h"
 
 #if defined(MAXON_TARGET_WINDOWS)
@@ -32,6 +33,113 @@ static const UINT_PTR TIMER_ID = 1001;
 static HHOOK g_keyboardHook = NULL;
 
 static inline int LocalClampInt(int v, int minV, int maxV) { return (v < minV) ? minV : ((v > maxV) ? maxV : v); }
+
+static std::unordered_map<Int32, Gdiplus::Bitmap*> s_gdiIconCache;
+
+static void ClearGdiIconCache()
+{
+    for (auto& pair : s_gdiIconCache)
+    {
+        if (pair.second)
+        {
+            delete pair.second;
+        }
+    }
+    s_gdiIconCache.clear();
+}
+
+static Gdiplus::Bitmap* GetOrCreateGdiIcon(Int32 commandId)
+{
+    if (commandId <= 0)
+        return nullptr;
+
+    auto it = s_gdiIconCache.find(commandId);
+    if (it != s_gdiIconCache.end())
+        return it->second;
+
+    IconData icon;
+    if (!GetIcon(commandId, &icon) || !icon.bmp)
+    {
+        s_gdiIconCache[commandId] = nullptr;
+        return nullptr;
+    }
+
+    Int32 bmpW = icon.bmp->GetBw();
+    Int32 bmpH = icon.bmp->GetBh();
+    if (bmpW <= 0 || bmpH <= 0)
+    {
+        s_gdiIconCache[commandId] = nullptr;
+        return nullptr;
+    }
+
+    Int32 w = icon.w;
+    Int32 h = icon.h;
+    if (w <= 0 || h <= 0)
+    {
+        w = bmpW;
+        h = bmpH;
+    }
+
+    Int32 startX = icon.x;
+    Int32 startY = icon.y;
+    if (startX < 0) startX = 0;
+    if (startY < 0) startY = 0;
+    if (startX + w > bmpW) w = bmpW - startX;
+    if (startY + h > bmpH) h = bmpH - startY;
+
+    if (w <= 0 || h <= 0)
+    {
+        s_gdiIconCache[commandId] = nullptr;
+        return nullptr;
+    }
+
+    Gdiplus::Bitmap* gdiBmp = new Gdiplus::Bitmap((INT)w, (INT)h, PixelFormat32bppPARGB);
+    Gdiplus::Rect lockRect(0, 0, (INT)w, (INT)h);
+    Gdiplus::BitmapData bmpData;
+
+    if (gdiBmp->LockBits(&lockRect, Gdiplus::ImageLockModeWrite, PixelFormat32bppPARGB, &bmpData) != Gdiplus::Ok)
+    {
+        delete gdiBmp;
+        s_gdiIconCache[commandId] = nullptr;
+        return nullptr;
+    }
+
+    BaseBitmap* alpha = icon.bmp->GetInternalChannel();
+    if (!alpha && icon.bmp->GetChannelCount() > 0)
+    {
+        alpha = icon.bmp->GetChannelNum(0);
+    }
+
+    BYTE* scan0 = (BYTE*)bmpData.Scan0;
+    int stride = bmpData.Stride;
+
+    for (Int32 row = 0; row < h; ++row)
+    {
+        DWORD* rowPixels = (DWORD*)(scan0 + row * stride);
+        for (Int32 col = 0; col < w; ++col)
+        {
+            UInt16 r = 0, g = 0, b = 0;
+            icon.bmp->GetPixel(startX + col, startY + row, &r, &g, &b);
+
+            UInt16 a = 255;
+            if (alpha)
+            {
+                icon.bmp->GetAlphaPixel(alpha, startX + col, startY + row, &a);
+            }
+
+            BYTE pa = (BYTE)(a > 255 ? 255 : a);
+            BYTE pr = (BYTE)((r * pa + 127) / 255);
+            BYTE pg = (BYTE)((g * pa + 127) / 255);
+            BYTE pb = (BYTE)((b * pa + 127) / 255);
+
+            rowPixels[col] = ((DWORD)pa << 24) | ((DWORD)pr << 16) | ((DWORD)pg << 8) | (DWORD)pb;
+        }
+    }
+
+    gdiBmp->UnlockBits(&bmpData);
+    s_gdiIconCache[commandId] = gdiBmp;
+    return gdiBmp;
+}
 
 static std::wstring ToWString(const maxon::String& str)
 {
@@ -260,9 +368,18 @@ Bool PieMenuOverlay::Init()
 #endif
 }
 
+void PieMenuOverlay::ClearIconCache()
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    ClearGdiIconCache();
+#endif
+}
+
 void PieMenuOverlay::Shutdown()
 {
 #if defined(MAXON_TARGET_WINDOWS)
+    ClearGdiIconCache();
+
     if (g_keyboardHook)
     {
         UnhookWindowsHookEx(g_keyboardHook);
@@ -1163,11 +1280,17 @@ void PieMenuOverlay::RenderOverlay()
             g.DrawPath(&borderPen, &path);
         }
 
-        // 2. Draw Labels inside segments
-        Gdiplus::Font font(L"Segoe UI", 9.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+        // 2. Draw Icons and Labels inside segments
+        Gdiplus::Font font(L"Segoe UI", 8.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
         Gdiplus::StringFormat format;
         format.SetAlignment(Gdiplus::StringAlignmentCenter);
         format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
+
+        g.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBilinear);
+        g.SetPixelOffsetMode(Gdiplus::PixelOffsetModeHalf);
+
+        PieDisplayMode dispMode = m_activeProfile ? m_activeProfile->displayMode : mgr.m_displayMode;
+        float baseIconSz = (float)(m_activeProfile ? ((m_activeProfile->iconSize >= 12.0) ? m_activeProfile->iconSize : 24.0) : ((mgr.m_iconSize >= 12.0) ? mgr.m_iconSize : 24.0));
 
         for (Int32 i = 0; i < count; ++i)
         {
@@ -1179,17 +1302,44 @@ void PieMenuOverlay::RenderOverlay()
 
             float rIn = isHovered ? hoverInnerR : baseInnerR;
             float rOut = isHovered ? hoverOuterR : baseOuterR;
-            float rText = (rIn + rOut) * 0.5f;
+            float rMid = (rIn + rOut) * 0.5f;
 
             float midDeg = 270.0f + (float)i * sliceDeg;
             float midRad = midDeg * deg2rad;
 
-            float tx = cx + std::cos(midRad) * rText;
-            float ty = cy + std::sin(midRad) * rText;
+            Gdiplus::Bitmap* pIconBmp = nullptr;
+            if (dispMode != PieDisplayMode::LabelOnly && slot.commandId > 0)
+            {
+                pIconBmp = GetOrCreateGdiIcon(slot.commandId);
+            }
 
             String label = slot.GetEffectiveTitle();
             if (slot.IsSubMenu())
+            {
+                if (label.GetLength() > 9)
+                {
+                    label = label.SubStr(0, 8);
+                    label += ".."_s;
+                }
                 label += " >"_s;
+            }
+            else if (pIconBmp != nullptr && dispMode == PieDisplayMode::IconAndLabel)
+            {
+                if (label.GetLength() > 11)
+                {
+                    label = label.SubStr(0, 10);
+                    label += ".."_s;
+                }
+            }
+            else
+            {
+                if (label.GetLength() > 12)
+                {
+                    label = label.SubStr(0, 11);
+                    label += ".."_s;
+                }
+            }
+
             std::wstring wLabel = ToWString(label);
 
             Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
@@ -1210,12 +1360,65 @@ void PieMenuOverlay::RenderOverlay()
                 textCol = Gdiplus::Color(220, 200, 210, 225);
             }
 
-            // Drop shadow for text readability
-            Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(180, 0, 0, 0));
-            g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(tx + 1.0f, ty + 1.0f), &format, &shadowBrush);
+            if (dispMode == PieDisplayMode::IconOnly && pIconBmp != nullptr)
+            {
+                // Only icon: centered at rMid, label is omitted
+                float ix = cx + std::cos(midRad) * rMid;
+                float iy = cy + std::sin(midRad) * rMid;
 
-            Gdiplus::SolidBrush textBrush(textCol);
-            g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(tx, ty), &format, &textBrush);
+                float iconSz = (isHovered ? (baseIconSz * 1.15f) : baseIconSz) * radiusScale;
+
+                if (isHovered)
+                {
+                    Gdiplus::SolidBrush iconGlow(Gdiplus::Color(55, (BYTE)(slot.accentColor.x * 255.0), (BYTE)(slot.accentColor.y * 255.0), (BYTE)(slot.accentColor.z * 255.0)));
+                    g.FillEllipse(&iconGlow, ix - iconSz * 0.65f, iy - iconSz * 0.65f, iconSz * 1.3f, iconSz * 1.3f);
+                }
+
+                g.DrawImage(pIconBmp, ix - iconSz * 0.5f, iy - iconSz * 0.5f, iconSz, iconSz);
+            }
+            else if (dispMode == PieDisplayMode::IconAndLabel && pIconBmp != nullptr)
+            {
+                // Both icon and label: icon shifted inward, label shifted outward
+                float offset = (baseIconSz * 0.45f + 2.0f) * radiusScale;
+                float rIcon = rMid - offset;
+                float rLabel = rMid + offset + 2.0f * radiusScale;
+
+                float ix = cx + std::cos(midRad) * rIcon;
+                float iy = cy + std::sin(midRad) * rIcon;
+
+                float iconSz = (isHovered ? (baseIconSz * 1.1f) : baseIconSz) * radiusScale;
+
+                if (isHovered)
+                {
+                    Gdiplus::SolidBrush iconGlow(Gdiplus::Color(45, (BYTE)(slot.accentColor.x * 255.0), (BYTE)(slot.accentColor.y * 255.0), (BYTE)(slot.accentColor.z * 255.0)));
+                    g.FillEllipse(&iconGlow, ix - iconSz * 0.65f, iy - iconSz * 0.65f, iconSz * 1.3f, iconSz * 1.3f);
+                }
+
+                g.DrawImage(pIconBmp, ix - iconSz * 0.5f, iy - iconSz * 0.5f, iconSz, iconSz);
+
+                float lx = cx + std::cos(midRad) * rLabel;
+                float ly = cy + std::sin(midRad) * rLabel;
+
+                // Drop shadow for text readability
+                Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(180, 0, 0, 0));
+                g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(lx + 1.0f, ly + 1.0f), &format, &shadowBrush);
+
+                Gdiplus::SolidBrush textBrush(textCol);
+                g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(lx, ly), &format, &textBrush);
+            }
+            else
+            {
+                // Label only (or slot without icon): centered at rMid
+                float tx = cx + std::cos(midRad) * rMid;
+                float ty = cy + std::sin(midRad) * rMid;
+
+                // Drop shadow for text readability
+                Gdiplus::SolidBrush shadowBrush(Gdiplus::Color(180, 0, 0, 0));
+                g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(tx + 1.0f, ty + 1.0f), &format, &shadowBrush);
+
+                Gdiplus::SolidBrush textBrush(textCol);
+                g.DrawString(wLabel.c_str(), -1, &font, Gdiplus::PointF(tx, ty), &format, &textBrush);
+            }
         }
 
         // 3. Center Hub (Slot 8 / deadzone)
@@ -1306,7 +1509,24 @@ void PieMenuOverlay::RenderOverlay()
         Gdiplus::Pen hubPen(hubBorderCol, centerHovered ? 2.0f : 1.2f);
         g.DrawPath(&hubPen, &hubPath);
 
-        if (centerConfigured)
+        Gdiplus::Bitmap* pIconBmp8 = (dispMode != PieDisplayMode::LabelOnly && slot8.commandId > 0) ? GetOrCreateGdiIcon(slot8.commandId) : nullptr;
+
+        if (centerConfigured && pIconBmp8 != nullptr)
+        {
+            float hubBaseSz = baseIconSz;
+            float hubIconSz = (centerHovered ? (hubBaseSz * 1.1f) : hubBaseSz) * (deadzoneRadius / 26.0f);
+            if (hubIconSz > deadzoneRadius * 1.6f)
+                hubIconSz = deadzoneRadius * 1.6f;
+
+            if (centerHovered)
+            {
+                Gdiplus::SolidBrush hubGlow(Gdiplus::Color(55, (BYTE)(slot8.accentColor.x * 255.0), (BYTE)(slot8.accentColor.y * 255.0), (BYTE)(slot8.accentColor.z * 255.0)));
+                g.FillEllipse(&hubGlow, cx - hubIconSz * 0.65f, cy - hubIconSz * 0.65f, hubIconSz * 1.3f, hubIconSz * 1.3f);
+            }
+
+            g.DrawImage(pIconBmp8, cx - hubIconSz * 0.5f, cy - hubIconSz * 0.5f, hubIconSz, hubIconSz);
+        }
+        else if (centerConfigured)
         {
             String cText = slot8.GetEffectiveTitle();
             if (slot8.IsSubMenu())

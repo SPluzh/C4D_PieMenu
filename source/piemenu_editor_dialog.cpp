@@ -37,6 +37,8 @@ enum
     IDC_INSPECTOR_CLEAR_SLOT,
     IDC_GLOBAL_RADIUS,
     IDC_GLOBAL_DEADZONE,
+    IDC_GLOBAL_ICON_SIZE,
+    IDC_GLOBAL_DISPLAY_MODE,
     IDC_BTN_SAVE,
     IDC_BTN_EXPORT,
     IDC_BTN_IMPORT,
@@ -623,16 +625,22 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
     GroupEnd();
 
-    // 3. Global Settings group (Radius & Deadzone)
-    GroupBegin(0, BFH_SCALEFIT, 4, 0, "Global Behavior"_s, BORDER_GROUP_IN);
+    // 3. Global Display & Sizing settings group
+    GroupBegin(0, BFH_SCALEFIT, 8, 0, "Display & Sizing"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(6, 0);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Menu Radius (px):"_s, 0);
-    AddEditNumber(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 60, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Radius:"_s, 0);
+    AddEditNumber(IDC_GLOBAL_RADIUS, BFH_LEFT, 50, 0);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone (px):"_s, 0);
-    AddEditNumber(IDC_GLOBAL_DEADZONE, BFH_SCALEFIT, 60, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone:"_s, 0);
+    AddEditNumber(IDC_GLOBAL_DEADZONE, BFH_LEFT, 50, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Icon Size:"_s, 0);
+    AddEditNumber(IDC_GLOBAL_ICON_SIZE, BFH_LEFT, 50, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Display Style:"_s, 0);
+    AddComboBox(IDC_GLOBAL_DISPLAY_MODE, BFH_SCALEFIT, 130, 0);
 
     GroupEnd();
 
@@ -991,6 +999,13 @@ Bool PieMenuEditorDialog::InitValues()
     // Global settings
     SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
     SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
+    SetFloat(IDC_GLOBAL_ICON_SIZE, mgr.m_iconSize);
+
+    FreeChildren(IDC_GLOBAL_DISPLAY_MODE);
+    AddChild(IDC_GLOBAL_DISPLAY_MODE, 0, "Icon and Label"_s);
+    AddChild(IDC_GLOBAL_DISPLAY_MODE, 1, "Icon Only"_s);
+    AddChild(IDC_GLOBAL_DISPLAY_MODE, 2, "Label Only"_s);
+    SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)mgr.m_displayMode);
 
     // Populate and initialize commands library
     PopulateAllCommands();
@@ -1043,6 +1058,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
     SetInt32(IDC_SLOTCOUNT_COMBO, (prof->slotCount == 4) ? 0 : 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
+    SetFloat(IDC_GLOBAL_ICON_SIZE, prof->iconSize);
+    SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)prof->displayMode);
 }
 
 void PieMenuEditorDialog::ApplyMenuSettingsChanges()
@@ -1068,6 +1085,22 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     Bool st = true;
     if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
         prof->showTitle = st;
+
+    Float sz = 24.0;
+    if (GetFloat(IDC_GLOBAL_ICON_SIZE, sz))
+    {
+        if (sz < 12.0) sz = 12.0;
+        if (sz > 64.0) sz = 64.0;
+        prof->iconSize = sz;
+        mgr.m_iconSize = sz;
+    }
+
+    Int32 dm = 0;
+    if (GetInt32(IDC_GLOBAL_DISPLAY_MODE, dm))
+    {
+        prof->displayMode = (PieDisplayMode)dm;
+        mgr.m_displayMode = (PieDisplayMode)dm;
+    }
 
     RefreshProfileComboList();
     m_userArea.Redraw();
@@ -1590,7 +1623,10 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         {
             Float r = 85.0;
             if (GetFloat(IDC_GLOBAL_RADIUS, r))
+            {
                 mgr.m_radius = r;
+                m_userArea.Redraw();
+            }
             break;
         }
 
@@ -1598,13 +1634,67 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         {
             Float dz = 22.0;
             if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
+            {
                 mgr.m_deadzone = dz;
+                m_userArea.Redraw();
+            }
+            break;
+        }
+
+        case IDC_GLOBAL_ICON_SIZE:
+        {
+            Float sz = 24.0;
+            if (GetFloat(IDC_GLOBAL_ICON_SIZE, sz))
+            {
+                if (sz < 12.0) sz = 12.0;
+                if (sz > 64.0) sz = 64.0;
+                Int32 curIdx = m_userArea.GetActiveProfileIndex();
+                PieProfile* prof = mgr.GetProfile(curIdx);
+                if (prof)
+                    prof->iconSize = sz;
+                mgr.m_iconSize = sz;
+                m_userArea.Redraw();
+            }
+            break;
+        }
+
+        case IDC_GLOBAL_DISPLAY_MODE:
+        {
+            Int32 mode = 0;
+            if (GetInt32(IDC_GLOBAL_DISPLAY_MODE, mode))
+            {
+                Int32 curIdx = m_userArea.GetActiveProfileIndex();
+                PieProfile* prof = mgr.GetProfile(curIdx);
+                if (prof)
+                    prof->displayMode = (PieDisplayMode)mode;
+                mgr.m_displayMode = (PieDisplayMode)mode;
+                m_userArea.Redraw();
+            }
             break;
         }
 
         case IDC_BTN_SAVE:
         {
             ApplyInspectorChanges();
+            ApplyMenuSettingsChanges();
+            ApplyHotkeyChanges();
+            Float r = 85.0;
+            if (GetFloat(IDC_GLOBAL_RADIUS, r))
+                mgr.m_radius = r;
+            Float dz = 22.0;
+            if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
+                mgr.m_deadzone = dz;
+            Float sz = 24.0;
+            if (GetFloat(IDC_GLOBAL_ICON_SIZE, sz))
+            {
+                if (sz < 12.0) sz = 12.0;
+                if (sz > 64.0) sz = 64.0;
+                mgr.m_iconSize = sz;
+            }
+            Int32 dm = 0;
+            if (GetInt32(IDC_GLOBAL_DISPLAY_MODE, dm))
+                mgr.m_displayMode = (PieDisplayMode)dm;
+
             if (mgr.SaveToFile())
                 GePrint("PieMenu: Successfully saved configuration to preferences."_s);
             break;
@@ -1621,6 +1711,16 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             Float dz = 22.0;
             if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
                 mgr.m_deadzone = dz;
+            Float sz = 24.0;
+            if (GetFloat(IDC_GLOBAL_ICON_SIZE, sz))
+            {
+                if (sz < 12.0) sz = 12.0;
+                if (sz > 64.0) sz = 64.0;
+                mgr.m_iconSize = sz;
+            }
+            Int32 dm = 0;
+            if (GetInt32(IDC_GLOBAL_DISPLAY_MODE, dm))
+                mgr.m_displayMode = (PieDisplayMode)dm;
 
             Int32 profileCount = mgr.GetProfileCount();
             Int32 exportTarget = NOTOK; // NOTOK means all
@@ -1709,6 +1809,8 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
                 SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
                 SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
+                SetFloat(IDC_GLOBAL_ICON_SIZE, mgr.m_iconSize);
+                SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)mgr.m_displayMode);
 
                 m_userArea.Redraw();
                 UpdateInspector();
@@ -1797,17 +1899,12 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
 
 void PieMenuEditorDialog::DestroyWindow()
 {
-    // Apply any pending inspector edits before saving
+    // Apply any pending edits before saving
     ApplyInspectorChanges();
+    ApplyMenuSettingsChanges();
+    ApplyHotkeyChanges();
 
     PieProfileManager& mgr = PieProfileManager::Get();
-    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
-    if (prof)
-    {
-        String newName;
-        if (GetString(IDC_PROFILE_NAME_EDIT, newName) && newName.IsPopulated())
-            prof->name = newName;
-    }
 
     Float r = 85.0;
     if (GetFloat(IDC_GLOBAL_RADIUS, r))
@@ -1816,7 +1913,6 @@ void PieMenuEditorDialog::DestroyWindow()
     Float dz = 22.0;
     if (GetFloat(IDC_GLOBAL_DEADZONE, dz))
         mgr.m_deadzone = dz;
-
 
     // Automatically save configuration on dialog close
     if (mgr.SaveToFile())

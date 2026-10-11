@@ -21,6 +21,7 @@ public:
     Bool OpenProfile(PieProfile* profile);
     void CommitAndClose();
     void CancelAndClose();
+    void ClearIconCache();
 
     Bool NavigateToSubmenu(PieProfile* subProfile);
     Bool NavigateBack();
