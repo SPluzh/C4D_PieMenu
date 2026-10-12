@@ -51,7 +51,6 @@ enum
     IDC_BTN_SAVE,
     IDC_BTN_EXPORT,
     IDC_BTN_IMPORT,
-    IDC_BTN_RESET,
     IDC_BTN_CLOSE,
 
     // Left panel and tabs
@@ -771,12 +770,11 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupEnd(); // End Main 2-column layout
 
     // 3. Action buttons at bottom
-    GroupBegin(0, BFH_SCALEFIT, 5, 0, ""_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
     GroupBorderSpace(12, 6, 12, 10);
     AddButton(IDC_BTN_SAVE, BFH_SCALEFIT, 0, 0, "Save Configuration"_s);
     AddButton(IDC_BTN_EXPORT, BFH_SCALEFIT, 0, 0, "Export Settings..."_s);
     AddButton(IDC_BTN_IMPORT, BFH_SCALEFIT, 0, 0, "Import Settings..."_s);
-    AddButton(IDC_BTN_RESET, BFH_SCALEFIT, 0, 0, "Reset to Defaults"_s);
     AddButton(IDC_BTN_CLOSE, BFH_SCALEFIT, 0, 0, "Close"_s);
     GroupEnd();
 
@@ -1104,7 +1102,13 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     Int32 curIdx = m_userArea.GetActiveProfileIndex();
     PieProfile* prof = mgr.GetProfile(curIdx);
     if (!prof)
+    {
+        SetString(IDC_PROFILE_NAME_EDIT, ""_s);
+        SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Global);
+        SetInt32(IDC_SLOTCOUNT_SLIDER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
+        SetBool(IDC_PROFILE_SHOW_TITLE, true);
         return;
+    }
 
     SetString(IDC_PROFILE_NAME_EDIT, prof->name);
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
@@ -1187,6 +1191,18 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
 void PieMenuEditorDialog::SelectProfile(Int32 index)
 {
     PieProfileManager& mgr = PieProfileManager::Get();
+    if (mgr.GetProfileCount() <= 0)
+    {
+        m_userArea.SetActiveProfileIndex(-1);
+        SetInt32(IDC_PROFILE_COMBO, NOTOK);
+        UpdateMenuSettingsUI();
+        UpdateHotkeyUI();
+        RefreshSubmenuList();
+        UpdateInspector();
+        m_userArea.Redraw();
+        return;
+    }
+
     if (index < 0 || index >= mgr.GetProfileCount())
         index = 0;
 
@@ -1224,7 +1240,14 @@ void PieMenuEditorDialog::UpdateHotkeyUI()
     PieProfileManager& mgr = PieProfileManager::Get();
     PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
     if (!prof)
+    {
+        SetBool(IDC_HOTKEY_CTRL, false);
+        SetBool(IDC_HOTKEY_SHIFT, false);
+        SetBool(IDC_HOTKEY_ALT, false);
+        SetInt32(IDC_HOTKEY_KEY_COMBO, 0);
+        SetString(IDC_HOTKEY_PREVIEW_TEXT, "Assigned: [None]"_s);
         return;
+    }
 
     SetBool(IDC_HOTKEY_CTRL, prof->hotkey.ctrl);
     SetBool(IDC_HOTKEY_SHIFT, prof->hotkey.shift);
@@ -1329,7 +1352,25 @@ void PieMenuEditorDialog::UpdateInspector()
     PieProfileManager& mgr = PieProfileManager::Get();
     PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
     if (!prof)
+    {
+        SetString(IDC_INSPECTOR_SLOT_TITLE, "No Menu Selected"_s);
+        SetBool(IDC_INSPECTOR_ENABLED, false);
+        SetInt32(IDC_INSPECTOR_SUBMENU_COMBO, 0);
+        SetInt32(IDC_INSPECTOR_CMD_ID, 0);
+        SetString(IDC_INSPECTOR_CMD_NAME, ""_s);
+        SetString(IDC_INSPECTOR_SHIFT_LABEL, "None"_s);
+        SetString(IDC_INSPECTOR_CTRL_LABEL, "None"_s);
+        SetString(IDC_INSPECTOR_ALT_LABEL, "None"_s);
+        Enable(IDC_INSPECTOR_GOTO_SUBMENU, false);
+        Enable(IDC_INSPECTOR_CMD_ID, false);
+        Enable(IDC_INSPECTOR_SHIFT_SET, false);
+        Enable(IDC_INSPECTOR_SHIFT_CLEAR, false);
+        Enable(IDC_INSPECTOR_CTRL_SET, false);
+        Enable(IDC_INSPECTOR_CTRL_CLEAR, false);
+        Enable(IDC_INSPECTOR_ALT_SET, false);
+        Enable(IDC_INSPECTOR_ALT_CLEAR, false);
         return;
+    }
 
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
 
@@ -1533,9 +1574,9 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
         case IDC_BTN_DELETE_PROFILE:
         {
-            if (mgr.GetProfileCount() <= 1)
+            if (mgr.GetProfileCount() <= 0)
             {
-                MessageDialog("Cannot delete the only remaining pie menu."_s);
+                MessageDialog("No pie menu to delete."_s);
                 break;
             }
 
@@ -2050,17 +2091,6 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             {
                 MessageDialog("Failed to import pie menu configuration from the file."_s);
             }
-            break;
-        }
-
-        case IDC_BTN_RESET:
-        {
-            mgr.InitDefaults();
-            mgr.SaveToFile();
-            InitValues();
-            m_userArea.Redraw();
-            UpdateHotkeyUI();
-            GePrint("PieMenu: Reset all profiles to factory defaults."_s);
             break;
         }
 

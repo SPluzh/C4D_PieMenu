@@ -319,301 +319,12 @@ void PieProfileManager::InitDefaults()
 {
     m_profiles.Reset();
 
-    // -------------------------------------------------------------
-    // PROFILE 0: POLYGONS MODE
-    // -------------------------------------------------------------
-    {
-        PieProfile p;
-        p.name = "Polygons"_s;
-        p.context = PieContextMode::Polygons;
-        p.slotCount = 8;
-        p.hotkey.enabled = true;
-        p.hotkey.ctrl = true;
-        p.hotkey.shift = true;
-        p.hotkey.alt = false;
-        p.hotkey.vkCode = 0;
-
-        // 0: Up -> Extrude
-        p.slots[0].commandId = 1011152;
-        p.slots[0].customLabel = "Extrude"_s;
-        p.slots[0].accentColor = Vector(0.15, 0.85, 0.45); // Mint Green
-
-        // 1: Up-Right -> Inset / Extrude Inner
-        p.slots[1].commandId = 1011153;
-        p.slots[1].customLabel = "Inner Extrude"_s;
-        p.slots[1].accentColor = Vector(0.2, 0.8, 0.6);
-
-        // 2: Right -> Bevel
-        p.slots[2].commandId = 1011155;
-        p.slots[2].customLabel = "Bevel"_s;
-        p.slots[2].accentColor = Vector(0.25, 0.65, 1.0); // Blue
-
-        // 3: Down-Right -> Bridge
-        p.slots[3].commandId = 431000010;
-        p.slots[3].customLabel = "Bridge"_s;
-        p.slots[3].accentColor = Vector(0.5, 0.5, 1.0);
-
-        // 4: Down -> Loop Cut
-        p.slots[4].commandId = 1038596;
-        p.slots[4].customLabel = "Loop Cut"_s;
-        p.slots[4].accentColor = Vector(1.0, 0.75, 0.2); // Amber
-
-        // 5: Down-Left -> Subdivide
-        p.slots[5].commandId = 1011170;
-        p.slots[5].customLabel = "Subdivide"_s;
-        p.slots[5].accentColor = Vector(0.9, 0.5, 0.3);
-
-        // 6: Left -> Delete
-        p.slots[6].commandId = 12109;
-        p.slots[6].customLabel = "Delete"_s;
-        p.slots[6].accentColor = Vector(1.0, 0.3, 0.3); // Red
-
-        // 7: Up-Left -> Close Poly Hole
-        p.slots[7].commandId = 431000009;
-        p.slots[7].customLabel = "Close Hole"_s;
-        p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
-
-        // Center -> Optimize
-        p.slots[CENTER_SLOT_INDEX].commandId = 1011167;
-        p.slots[CENTER_SLOT_INDEX].customLabel = "Optimize"_s;
-        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
-
-        m_profiles.Append(p) iferr_ignore("Append");
-    }
-
-    // -------------------------------------------------------------
-    // PROFILE 1: EDGES MODE
-    // -------------------------------------------------------------
-    {
-        PieProfile p;
-        p.name = "Edges"_s;
-        p.context = PieContextMode::Edges;
-        p.slotCount = 8;
-        p.hotkey.enabled = true;
-        p.hotkey.ctrl = true;
-        p.hotkey.shift = true;
-        p.hotkey.alt = false;
-        p.hotkey.vkCode = 0;
-
-        // 0: Up -> Bevel
-        p.slots[0].commandId = 1011155;
-        p.slots[0].customLabel = "Bevel"_s;
-        p.slots[0].accentColor = Vector(0.25, 0.65, 1.0);
-
-        // 1: Up-Right -> Slide
-        p.slots[1].commandId = 1011160;
-        p.slots[1].customLabel = "Slide"_s;
-        p.slots[1].accentColor = Vector(0.2, 0.8, 0.7);
-
-        // 2: Right -> Dissolve
-        p.slots[2].commandId = 1011162;
-        p.slots[2].customLabel = "Dissolve"_s;
-        p.slots[2].accentColor = Vector(0.4, 0.6, 0.9);
-
-        // 3: Down-Right -> Bridge
-        p.slots[3].commandId = 431000010;
-        p.slots[3].customLabel = "Bridge"_s;
-        p.slots[3].accentColor = Vector(0.5, 0.5, 1.0);
-
-        // 4: Down -> Loop Cut
-        p.slots[4].commandId = 1038596;
-        p.slots[4].customLabel = "Loop Cut"_s;
-        p.slots[4].accentColor = Vector(1.0, 0.75, 0.2);
-
-        // 5: Down-Left -> Edge Cut
-        p.slots[5].commandId = 1011158;
-        p.slots[5].customLabel = "Edge Cut"_s;
-        p.slots[5].accentColor = Vector(0.9, 0.5, 0.3);
-
-        // 6: Left -> Delete
-        p.slots[6].commandId = 12109;
-        p.slots[6].customLabel = "Delete"_s;
-        p.slots[6].accentColor = Vector(1.0, 0.3, 0.3);
-
-        // 7: Up-Left -> Spin Edge
-        p.slots[7].commandId = 431000012;
-        p.slots[7].customLabel = "Spin Edge"_s;
-        p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
-
-        // Center -> Extrude
-        p.slots[CENTER_SLOT_INDEX].commandId = 1011152;
-        p.slots[CENTER_SLOT_INDEX].customLabel = "Extrude"_s;
-        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
-
-        m_profiles.Append(p) iferr_ignore("Append");
-    }
-
-    // -------------------------------------------------------------
-    // PROFILE 2: POINTS MODE
-    // -------------------------------------------------------------
-    {
-        PieProfile p;
-        p.name = "Points"_s;
-        p.context = PieContextMode::Points;
-        p.slotCount = 8;
-        p.hotkey.enabled = true;
-        p.hotkey.ctrl = true;
-        p.hotkey.shift = true;
-        p.hotkey.alt = false;
-        p.hotkey.vkCode = 0;
-
-        // 0: Up -> Optimize
-        p.slots[0].commandId = 1011167;
-        p.slots[0].customLabel = "Optimize"_s;
-        p.slots[0].accentColor = Vector(0.15, 0.85, 0.45);
-
-        // 1: Up-Right -> Weld
-        p.slots[1].commandId = 1011165;
-        p.slots[1].customLabel = "Weld"_s;
-        p.slots[1].accentColor = Vector(0.2, 0.8, 0.7);
-
-        // 2: Right -> Slide
-        p.slots[2].commandId = 1011160;
-        p.slots[2].customLabel = "Slide"_s;
-        p.slots[2].accentColor = Vector(0.25, 0.65, 1.0);
-
-        // 3: Down-Right -> Iron
-        p.slots[3].commandId = 1011163;
-        p.slots[3].customLabel = "Iron"_s;
-        p.slots[3].accentColor = Vector(0.5, 0.5, 1.0);
-
-        // 4: Down -> Set Point Value
-        p.slots[4].commandId = 1011168;
-        p.slots[4].customLabel = "Set Value"_s;
-        p.slots[4].accentColor = Vector(1.0, 0.75, 0.2);
-
-        // 5: Down-Left -> Bevel
-        p.slots[5].commandId = 1011155;
-        p.slots[5].customLabel = "Bevel Point"_s;
-        p.slots[5].accentColor = Vector(0.9, 0.5, 0.3);
-
-        // 6: Left -> Delete
-        p.slots[6].commandId = 12109;
-        p.slots[6].customLabel = "Delete"_s;
-        p.slots[6].accentColor = Vector(1.0, 0.3, 0.3);
-
-        // 7: Up-Left -> Bridge
-        p.slots[7].commandId = 431000010;
-        p.slots[7].customLabel = "Bridge"_s;
-        p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
-
-        // Center -> Dissolve
-        p.slots[CENTER_SLOT_INDEX].commandId = 1011162;
-        p.slots[CENTER_SLOT_INDEX].customLabel = "Dissolve"_s;
-        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
-
-        m_profiles.Append(p) iferr_ignore("Append");
-    }
-
-    // -------------------------------------------------------------
-    // PROFILE 3: OBJECTS MODE
-    // -------------------------------------------------------------
-    {
-        PieProfile p;
-        p.name = "Objects"_s;
-        p.context = PieContextMode::Objects;
-        p.slotCount = 8;
-        p.hotkey.enabled = true;
-        p.hotkey.ctrl = true;
-        p.hotkey.shift = true;
-        p.hotkey.alt = false;
-        p.hotkey.vkCode = 0;
-
-        // 0: Up -> Group Objects (Alt+G)
-        p.slots[0].commandId = 12141;
-        p.slots[0].customLabel = "Group (Null)"_s;
-        p.slots[0].accentColor = Vector(0.25, 0.65, 1.0);
-
-        // 1: Up-Right -> Subdivision Surface
-        p.slots[1].commandId = 1007455;
-        p.slots[1].customLabel = "Subdivision"_s;
-        p.slots[1].accentColor = Vector(0.2, 0.85, 0.5);
-
-        // 2: Right -> Connect Objects + Delete
-        p.slots[2].commandId = 12144;
-        p.slots[2].customLabel = "Connect+Del"_s;
-        p.slots[2].accentColor = Vector(0.3, 0.7, 0.9);
-
-        // 3: Down-Right -> Boole
-        p.slots[3].commandId = 1007457;
-        p.slots[3].customLabel = "Boole"_s;
-        p.slots[3].accentColor = Vector(0.5, 0.5, 1.0);
-
-        // 4: Down -> Remesh
-        p.slots[4].commandId = 1054321;
-        p.slots[4].customLabel = "Remesh"_s;
-        p.slots[4].accentColor = Vector(1.0, 0.75, 0.2);
-
-        // 5: Down-Left -> Symmetry
-        p.slots[5].commandId = 1007456;
-        p.slots[5].customLabel = "Symmetry"_s;
-        p.slots[5].accentColor = Vector(0.9, 0.5, 0.3);
-
-        // 6: Left -> Delete
-        p.slots[6].commandId = 12109;
-        p.slots[6].customLabel = "Delete"_s;
-        p.slots[6].accentColor = Vector(1.0, 0.3, 0.3);
-
-        // 7: Up-Left -> Ungroup
-        p.slots[7].commandId = 12142;
-        p.slots[7].customLabel = "Ungroup"_s;
-        p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
-
-        // Center -> Current State to Object
-        p.slots[CENTER_SLOT_INDEX].commandId = 12233;
-        p.slots[CENTER_SLOT_INDEX].customLabel = "Current State"_s;
-        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
-
-        m_profiles.Append(p) iferr_ignore("Append");
-    }
-
-    // -------------------------------------------------------------
-    // PROFILE 4: GLOBAL / SELECTION (FALLBACK)
-    // -------------------------------------------------------------
-    {
-        PieProfile p;
-        p.name = "Global"_s;
-        p.context = PieContextMode::Global;
-        p.slotCount = 4;
-        p.hotkey.enabled = true;
-        p.hotkey.ctrl = true;
-        p.hotkey.shift = true;
-        p.hotkey.alt = false;
-        p.hotkey.vkCode = 0;
-
-        // 0: Up -> Live Selection
-        p.slots[0].commandId = 200000083;
-        p.slots[0].customLabel = "Live Select"_s;
-        p.slots[0].accentColor = Vector(0.15, 0.85, 0.45);
-
-        // 1: Right -> Move Tool
-        p.slots[1].commandId = 200000088;
-        p.slots[1].customLabel = "Move Tool"_s;
-        p.slots[1].accentColor = Vector(0.25, 0.65, 1.0);
-
-        // 2: Down -> Scale Tool
-        p.slots[2].commandId = 200000089;
-        p.slots[2].customLabel = "Scale Tool"_s;
-        p.slots[2].accentColor = Vector(1.0, 0.75, 0.2);
-
-        // 3: Left -> Rotate Tool
-        p.slots[3].commandId = 200000090;
-        p.slots[3].customLabel = "Rotate Tool"_s;
-        p.slots[3].accentColor = Vector(1.0, 0.3, 0.3);
-
-        // Center -> Undo
-        p.slots[CENTER_SLOT_INDEX].commandId = 12105;
-        p.slots[CENTER_SLOT_INDEX].customLabel = "Undo"_s;
-        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
-
-        m_profiles.Append(p) iferr_ignore("Append");
-    }
-
     m_radius = 85.0;
     m_deadzone = 26.0;
     m_iconSize = 24.0;
     m_displayMode = PieDisplayMode::IconAndLabel;
 }
+
 
 Filename PieProfileManager::GetConfigPath() const
 {
@@ -889,46 +600,46 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     if (firstVal == PIE_CONFIG_MAGIC_V8)
     {
         version = 8;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V7)
     {
         version = 7;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V6)
     {
         version = 6;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V5)
     {
         version = 5;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V4)
     {
         version = 4;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V3)
     {
         version = 3;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
     else if (firstVal == PIE_CONFIG_MAGIC_V2)
     {
         version = 2;
-        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
             return false;
     }
-    else if (firstVal > 0 && firstVal <= 1000)
+    else if (firstVal >= 0 && firstVal <= 1000)
     {
         version = 1;
         profileCount = firstVal;
@@ -1126,12 +837,6 @@ Bool PieProfileManager::LoadFromFile()
     }
 
     file->Close();
-
-    if (m_profiles.IsEmpty())
-    {
-        InitDefaults();
-    }
-
     return true;
 }
 
@@ -1577,7 +1282,7 @@ Int32 PieProfileManager::DuplicateProfile(Int32 sourceIndex)
 
 Bool PieProfileManager::DeleteProfile(Int32 index)
 {
-    if (m_profiles.GetCount() <= 1)
+    if (m_profiles.IsEmpty())
         return false;
 
     if (index < 0 || index >= (Int32)m_profiles.GetCount())

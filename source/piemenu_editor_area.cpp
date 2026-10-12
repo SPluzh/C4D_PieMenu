@@ -246,7 +246,15 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
     if (!prof)
+    {
+        DrawSetPen(Vector(0.45, 0.48, 0.52));
+        DrawSetTextCol(Vector(0.55, 0.58, 0.62), Vector(0.12, 0.13, 0.16));
+        String emptyMsg = "No Pie Menu (Click '+ New' to create one)"_s;
+        Int32 tw = DrawGetTextWidth(emptyMsg);
+        Int32 th = DrawGetFontHeight();
+        DrawText(emptyMsg, (w - tw) / 2, (h - th) / 2);
         return;
+    }
 
     Float cx = Float(w) * 0.5;
     Float cy = Float(h) * 0.5;
