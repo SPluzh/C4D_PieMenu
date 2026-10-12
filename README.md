@@ -74,6 +74,7 @@
   - Adjustable Outer Radius and Deadzone Radius.
   - **Dynamic Slot Count**: Adjust radial slice count from 2 up to 24 items using an interactive numeric slider with real-time preview.
   - Toggle *Show Menu Title* badge.
+  - Toggle *Stay Open on Key Release*: When checked, releasing the trigger hotkey keeps the menu open for mouse click selection. When unchecked (default), releasing the hotkey executes the hovered slot or immediately closes without executing if in the center deadzone.
 - **Import & Export Settings**:
   - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files (includes full submenu hierarchies).
   - **Import Settings...**: Seamlessly load configuration from `.json` or binary `.dat` files with interactive prompt to either Replace all menus or Append/Merge new menus into your current configuration.
@@ -87,10 +88,10 @@
 
 | Action / Gesture | Description |
 |---|---|
-| **Tap Configured Hotkey** | Opens and pins the pie menu under cursor for browsing and LMB click selection |
 | **Hold Configured Hotkey** | Opens the radial pie menu for quick gesture flicking or hold-and-click |
+| **Release Hotkey** | In gesture mode: executes the active slot command immediately (**Press & Flick**); in center: cancels (or pins open if *Stay Open on Key Release* is checked) |
+| **Tap Hotkey** | If *Stay Open on Key Release* is checked: pins the menu open under cursor for browsing and LMB click selection |
 | **Move Mouse** | Highlights the targeted slot with popout and laser pointer |
-| **Release Hotkey** | In gesture mode: executes the active slot command immediately (**Press & Flick**); in center: cancels or pins menu |
 | **LMB Click** | Executes the active command (closes cleanly without re-opening), or pins/opens a submenu slot |
 | **Hold Alt while executing** | Makes new generator/object parent of selection (or custom Alt action) |
 | **Hold Shift while executing** | Makes new deformer child of selection, or opens tool options (or custom Shift action) |

@@ -16,6 +16,7 @@ static const Int32 PIE_CONFIG_MAGIC_V6 = 0x50494536; // "PIE6"
 static const Int32 PIE_CONFIG_MAGIC_V7 = 0x50494537; // "PIE7"
 static const Int32 PIE_CONFIG_MAGIC_V8 = 0x50494538; // "PIE8"
 static const Int32 PIE_CONFIG_MAGIC_V9 = 0x50494539; // "PIE9"
+static const Int32 PIE_CONFIG_MAGIC_V10 = 0x5049453A; // "PIE:"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -326,6 +327,7 @@ void PieProfileManager::InitDefaults()
     m_deadzone = 26.0;
     m_iconSize = 24.0;
     m_displayMode = PieDisplayMode::IconAndLabel;
+    m_stayOpenOnRelease = false;
 }
 
 
@@ -406,6 +408,7 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     j.Set("deadzone", (double)prof.deadzone);
     j.Set("iconSize", (double)prof.iconSize);
     j.Set("displayMode", (int64_t)prof.displayMode);
+    j.Set("stayOpenOnRelease", (bool)prof.stayOpenOnRelease);
 
     // Hotkey
     JsonValue jHk = JsonValue::Object();
@@ -539,6 +542,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     outProf.deadzone = (Float)jProf.GetNumber("deadzone", 26.0);
     outProf.iconSize = (Float)jProf.GetNumber("iconSize", 24.0);
     outProf.displayMode = (PieDisplayMode)(int)jProf.GetInt("displayMode", 0);
+    outProf.stayOpenOnRelease = jProf.GetBool("stayOpenOnRelease", false);
 
     const JsonValue* jHk = jProf.GetObject("hotkey");
     if (jHk)
@@ -610,7 +614,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     return true;
 }
 
-static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfile>& outProfiles, Float& outOuterRadius, Float& outInnerRadius, Float& outRadius, Float& outDeadzone, Float& outIconSize, PieDisplayMode& outDisplayMode, Bool& outUseCtrlShift, Int32& outTriggerKey)
+static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfile>& outProfiles, Float& outOuterRadius, Float& outInnerRadius, Float& outRadius, Float& outDeadzone, Float& outIconSize, PieDisplayMode& outDisplayMode, Bool& outStayOpenOnRelease, Bool& outUseCtrlShift, Int32& outTriggerKey)
 {
     if (!file)
         return false;
@@ -622,7 +626,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V9)
+    if (firstVal == PIE_CONFIG_MAGIC_V10)
+    {
+        version = 10;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V9)
     {
         version = 9;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -834,6 +844,15 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.displayMode = PieDisplayMode::IconAndLabel;
         }
 
+        if (version >= 10)
+        {
+            file->ReadBool(&prof.stayOpenOnRelease);
+        }
+        else
+        {
+            prof.stayOpenOnRelease = false;
+        }
+
         outProfiles.Append(prof) iferr_ignore("Append");
     }
 
@@ -874,6 +893,15 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
         }
     }
 
+    if (version >= 10)
+    {
+        file->ReadBool(&outStayOpenOnRelease);
+    }
+    else
+    {
+        outStayOpenOnRelease = false;
+    }
+
     // For files prior to V6, populate each profile with the global radius and deadzone
     if (version < 6)
     {
@@ -910,7 +938,7 @@ Bool PieProfileManager::LoadFromFile()
         return false;
     }
 
-    if (!ReadProfilesFromBinaryFile(file, m_profiles, m_outerRadius, m_innerRadius, m_radius, m_deadzone, m_iconSize, m_displayMode, m_useCtrlShift, m_triggerKey))
+    if (!ReadProfilesFromBinaryFile(file, m_profiles, m_outerRadius, m_innerRadius, m_radius, m_deadzone, m_iconSize, m_displayMode, m_stayOpenOnRelease, m_useCtrlShift, m_triggerKey))
     {
         if (m_profiles.IsEmpty())
             InitDefaults();
@@ -941,6 +969,7 @@ Bool PieProfileManager::ExportSettingsToFile(const Filename& path, Int32 singleP
         jSettings.Set("deadzone", m_deadzone);
         jSettings.Set("iconSize", m_iconSize);
         jSettings.Set("displayMode", (int64_t)m_displayMode);
+        jSettings.Set("stayOpenOnRelease", (bool)m_stayOpenOnRelease);
         root.Set("settings", jSettings);
 
         JsonValue jProfiles = JsonValue::Array();
@@ -981,7 +1010,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -991,9 +1020,10 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
             Float tempDeadzone = 26.0;
             Float tempIconSize = 24.0;
             PieDisplayMode tempDisplayMode = PieDisplayMode::IconAndLabel;
+            Bool tempStayOpenOnRelease = false;
             Bool tempCtrlShift = false;
             Int32 tempTrigger = 'V';
-            if (ReadProfilesFromBinaryFile(file, tempProfiles, tempOuterRadius, tempInnerRadius, tempRadius, tempDeadzone, tempIconSize, tempDisplayMode, tempCtrlShift, tempTrigger))
+            if (ReadProfilesFromBinaryFile(file, tempProfiles, tempOuterRadius, tempInnerRadius, tempRadius, tempDeadzone, tempIconSize, tempDisplayMode, tempStayOpenOnRelease, tempCtrlShift, tempTrigger))
             {
                 outProfileCount = (Int32)tempProfiles.GetCount();
                 if (outProfileCount > 0)
@@ -1071,19 +1101,20 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Float parsedDeadzone = m_deadzone;
     Float parsedIconSize = m_iconSize;
     PieDisplayMode parsedDisplayMode = m_displayMode;
+    Bool parsedStayOpenOnRelease = m_stayOpenOnRelease;
     Bool hasParsedSettings = false;
 
     // 1. Try binary DAT format
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Float dummyRadius = m_radius;
             Bool dummyCtrlShift = false;
             Int32 dummyTrigger = 'V';
-            if (ReadProfilesFromBinaryFile(file, parsedProfiles, parsedOuterRadius, parsedInnerRadius, dummyRadius, parsedDeadzone, parsedIconSize, parsedDisplayMode, dummyCtrlShift, dummyTrigger))
+            if (ReadProfilesFromBinaryFile(file, parsedProfiles, parsedOuterRadius, parsedInnerRadius, dummyRadius, parsedDeadzone, parsedIconSize, parsedDisplayMode, parsedStayOpenOnRelease, dummyCtrlShift, dummyTrigger))
             {
                 hasParsedSettings = true;
             }
@@ -1131,6 +1162,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
                 parsedDeadzone = (Float)jSettings->GetNumber("deadzone", (double)m_deadzone);
                 parsedIconSize = (Float)jSettings->GetNumber("iconSize", (double)m_iconSize);
                 parsedDisplayMode = (PieDisplayMode)jSettings->GetInt("displayMode", (int64_t)m_displayMode);
+                parsedStayOpenOnRelease = jSettings->GetBool("stayOpenOnRelease", m_stayOpenOnRelease);
                 hasParsedSettings = true;
             }
 
@@ -1207,6 +1239,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
             m_deadzone = parsedDeadzone;
             m_iconSize = parsedIconSize;
             m_displayMode = parsedDisplayMode;
+            m_stayOpenOnRelease = parsedStayOpenOnRelease;
         }
     }
     else
@@ -1240,8 +1273,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V9 header to denote separate outer and inner radius support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V9);
+    // Write magic V10 header to denote stay open on release support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V10);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1278,6 +1311,7 @@ Bool PieProfileManager::SaveToFile()
         file->WriteFloat64(prof.deadzone);
         file->WriteFloat64(prof.iconSize);
         file->WriteInt32((Int32)prof.displayMode);
+        file->WriteBool(prof.stayOpenOnRelease);
     }
 
     file->WriteBool(m_useCtrlShift);
@@ -1287,6 +1321,7 @@ Bool PieProfileManager::SaveToFile()
     file->WriteFloat64(m_deadzone);
     file->WriteFloat64(m_iconSize);
     file->WriteInt32((Int32)m_displayMode);
+    file->WriteBool(m_stayOpenOnRelease);
 
     file->Close();
     return true;
@@ -1387,6 +1422,7 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
     p.deadzone = m_deadzone;
     p.iconSize = m_iconSize;
     p.displayMode = m_displayMode;
+    p.stayOpenOnRelease = m_stayOpenOnRelease;
 
     m_profiles.Append(p) iferr_ignore("Append");
     return (Int32)m_profiles.GetCount() - 1;

@@ -579,6 +579,8 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
     if (!m_active)
         return;
 
+    const bool stayOpenOnRelease = m_activeProfile ? m_activeProfile->stayOpenOnRelease : PieProfileManager::Get().m_stayOpenOnRelease;
+
     if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
@@ -606,9 +608,18 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
                 return;
             }
         }
-        else if (m_hoveredSlot == CENTER_SLOT_INDEX && m_profileStack.IsEmpty() && !fromMouseClick && !m_mouseMovedOutsideDeadzone)
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && m_profileStack.IsEmpty() && !fromMouseClick && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
         {
-            // Released trigger in center hub at root without moving outside -> pin open for click selection!
+            // Released trigger in center hub at root
+            if (stayOpenOnRelease && !m_pinnedOpen)
+            {
+                m_pinnedOpen = true;
+                return;
+            }
+        }
+        else if (!fromMouseClick && m_profileStack.IsEmpty() && stayOpenOnRelease && (!slot.enabled || (slot.commandId <= 0 && !slot.HasModifierCommands())))
+        {
+            // Released trigger over an unassigned slot at root with stayOpenOnRelease enabled -> pin open
             if (!m_pinnedOpen)
             {
                 m_pinnedOpen = true;
@@ -640,8 +651,8 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
     }
     else if (!fromMouseClick && m_profileStack.IsEmpty())
     {
-        // Released trigger at root menu while in center deadzone without moving out -> pin open for click selection!
-        if (!m_mouseMovedOutsideDeadzone && !m_pinnedOpen)
+        // Released trigger at root menu while in center deadzone or gap
+        if (stayOpenOnRelease && !m_pinnedOpen)
         {
             m_pinnedOpen = true;
             return;
