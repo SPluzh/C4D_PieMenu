@@ -22,7 +22,11 @@ if (Test-Path -LiteralPath $xdl) {
     }
 }
 
-Copy-Item -Path "$source\*" -Destination $dest -Recurse -Force
+Copy-Item -Path "$source\C4D_PieMenu.xdl64" -Destination $dest -Force
+$resSrc = Join-Path $PSScriptRoot "res"
+if (Test-Path $resSrc) {
+    Copy-Item -Path $resSrc -Destination $dest -Recurse -Force
+}
 
 Get-ChildItem -LiteralPath $dest -Filter "*.old" -File | ForEach-Object {
     try { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue } catch {}

@@ -2038,7 +2038,7 @@ Bool PieMenuEditorCommand::Register()
         PLUGIN_ID_PIEMENU_EDITOR_COMMAND,
         "Pie Menu Configuration"_s,
         0,
-        nullptr,
+        AutoBitmap("piemenu.png"_s),
         "Open graphical Pie Menu profile editor with Drag & Drop"_s,
         NewObjClear(PieMenuEditorCommand)
     );

@@ -44,6 +44,13 @@ if exist "%SRC_2026%" (
     echo [WARNING] 2026 build not found.
 )
 
+:: Copy resources
+if exist "res" (
+    echo Copying resources...
+    xcopy /E /I /Y "res" "%STAGING%\2025\C4D_PieMenu\res"
+    xcopy /E /I /Y "res" "%STAGING%\2026\C4D_PieMenu\res"
+)
+
 :: Create ZIP using PowerShell
 echo Creating ZIP archive...
 powershell -Command "Compress-Archive -Path '%STAGING%\*' -DestinationPath '%ZIP_NAME%'"
