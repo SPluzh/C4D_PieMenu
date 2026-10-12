@@ -31,10 +31,10 @@
   - **Live Dynamic HUD Feedback**: Holding modifier keys while the menu is open updates slot icons and titles in real time and displays an active modifier badge (`[ALT: Parent]`, `[SHIFT: Child / Options]`, `[CTRL]`).
 
 - **Nested Submenus Support**: Any slot (radial or central) can be linked to another created Pie Menu profile:
-  - **Press & Flick into Submenu**: Hovering over a submenu slot for ~240ms expands the submenu centered under your cursor; continue flicking to execute the desired command in one fluid stroke!
+  - **Press & Flick into Submenu**: Hovering over a submenu slot instantly expands the submenu centered under your cursor (zero delay); continue flicking to execute the desired command in one fluid stroke!
   - **Click Navigation**: Click or release on a submenu slot to pin it open and browse choices.
   - **Breadcrumbs Badge**: Displays hierarchy at the top (e.g. `[Modeling > Tools > Extrude]`).
-  - **Intuitive Back Navigation**: Inside any submenu, click RMB, press `Backspace`, or click the center hub (`◀ Back`) to return to the parent menu. Esc or RMB at root cancels.
+  - **Intuitive Back Navigation**: Inside any submenu, click RMB, press `Backspace`, or click the center hub (`Back`) to return to the parent menu. Esc or RMB at root cancels.
 
 ### 2. Unlimited Context-Aware Profiles
 - **Create Unlimited Menus & Submenus**: Add as many custom pie menus as you need using the **`+ New Menu`**, **`Duplicate`**, and **`- Delete`** buttons. Menus can be used standalone or linked as submenus in other menus.
@@ -93,9 +93,9 @@
 | **Hold Alt while executing** | Makes new generator/object parent of selection (or custom Alt action) |
 | **Hold Shift while executing** | Makes new deformer child of selection, or opens tool options (or custom Shift action) |
 | **Hold Ctrl while executing** | Places newly created object at world origin (or custom Ctrl action) |
-| **Hover Submenu Slot (~240ms)** | Expands submenu under cursor; flick into any submenu command |
+| **Hover Submenu Slot** | Instantly expands submenu under cursor (zero delay); flick into any submenu command |
 | **LMB Click** | Executes command, or pins and opens a submenu slot |
-| **Center Hub (`◀ Back`)** | In submenu: returns to parent menu |
+| **Center Hub (`Back`)** | In submenu: returns to parent menu |
 | **`Backspace` / RMB in Submenu** | Returns back to parent menu |
 | **RMB Click at root or `Esc`** | Cancels and closes the menu without executing |
 

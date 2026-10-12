@@ -19,7 +19,7 @@ public:
 
     Bool Open();
     Bool OpenProfile(PieProfile* profile);
-    void CommitAndClose();
+    void CommitAndClose(bool fromMouseClick = true);
     void CancelAndClose();
     void ClearIconCache();
 
@@ -40,7 +40,7 @@ private:
     PieMenuOverlay();
     ~PieMenuOverlay();
 
-    void UpdateHover(Float dx, Float dy);
+    Bool UpdateHover(Float dx, Float dy);
     void RenderOverlay();
     void ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Bool ctrlDown, Bool altDown);
 

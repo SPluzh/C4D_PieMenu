@@ -557,7 +557,7 @@ Bool PieMenuOverlay::NavigateBack()
 #endif
 }
 
-void PieMenuOverlay::CommitAndClose()
+void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
 {
 #if defined(MAXON_TARGET_WINDOWS)
     if (!m_active)
@@ -578,19 +578,28 @@ void PieMenuOverlay::CommitAndClose()
         }
         else if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
         {
-            NavigateBack();
-            return;
+            if (fromMouseClick)
+            {
+                NavigateBack();
+                return;
+            }
+            else
+            {
+                // Released trigger while in center hub of submenu - pin open so user can browse
+                m_pinnedOpen = true;
+                return;
+            }
         }
     }
     else if (!m_profileStack.IsEmpty())
     {
-        // Check if inside center deadzone (Back button)
+        // Check if inside center deadzone (Back button) when clicked with mouse
         Float dx = Float(m_currentScreenX - m_originScreenX);
         Float dy = Float(m_currentScreenY - m_originScreenY);
         Float dist = std::sqrt(dx * dx + dy * dy);
         PieProfileManager& mgr = PieProfileManager::Get();
         const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
-        if (dist < deadzone)
+        if (fromMouseClick && dist < deadzone)
         {
             NavigateBack();
             return;
@@ -1084,7 +1093,7 @@ void PieMenuOverlay::CheckTrigger()
     {
         if (!m_pinnedOpen && !IsTriggerHeld())
         {
-            CommitAndClose();
+            CommitAndClose(false);
         }
     }
     else
@@ -1160,16 +1169,18 @@ void PieMenuOverlay::OnMouseMove(Int32 screenX, Int32 screenY)
 
     Float dx = Float(m_currentScreenX - m_originScreenX);
     Float dy = Float(m_currentScreenY - m_originScreenY);
-    UpdateHover(dx, dy);
+    if (UpdateHover(dx, dy))
+        return;
+
     RenderOverlay();
 }
 
-void PieMenuOverlay::UpdateHover(Float dx, Float dy)
+Bool PieMenuOverlay::UpdateHover(Float dx, Float dy)
 {
     if (!m_activeProfile)
     {
         m_hoveredSlot = NOTOK;
-        return;
+        return false;
     }
 
     Float dist = std::sqrt(dx * dx + dy * dy);
@@ -1209,6 +1220,21 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
     {
         m_lastHoveredSlot = m_hoveredSlot;
         m_hoverStartTick = (UInt32)GetTickCount();
+
+        // Immediately expand submenu on hover without delay
+        if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < m_activeProfile->slotCount)
+        {
+            const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+            if (slot.enabled && slot.IsSubMenu())
+            {
+                PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
+                if (sub && CanNavigateTo(sub))
+                {
+                    NavigateToSubmenu(sub);
+                    return true;
+                }
+            }
+        }
     }
 
     if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
@@ -1248,6 +1274,7 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
     {
         StatusSetText(FormatString("Pie Menu [@]: Move cursor toward a slot to select"_s, m_activeProfile ? m_activeProfile->name : "Radial"_s));
     }
+    return false;
 }
 
 Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, Int64 lParam)
@@ -1277,7 +1304,7 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
         {
             if (m_active)
             {
-                CommitAndClose();
+                CommitAndClose(true);
             }
             return 0;
         }
@@ -1318,25 +1345,21 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
 
                 if (!m_pinnedOpen && !IsTriggerHeld())
                 {
-                    CommitAndClose();
+                    CommitAndClose(false);
                     return 0;
                 }
 
-                // Check auto-expand submenu on hover
-                if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
+                // Check auto-expand submenu on hover (immediate)
+                if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < m_activeProfile->slotCount)
                 {
                     const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-                    if (slot.enabled && slot.IsSubMenu() && m_hoverStartTick > 0)
+                    if (slot.enabled && slot.IsSubMenu())
                     {
-                        UInt32 elapsed = (UInt32)GetTickCount() - m_hoverStartTick;
-                        if (elapsed >= 240)
+                        PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
+                        if (sub && CanNavigateTo(sub))
                         {
-                            PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
-                            if (sub && CanNavigateTo(sub))
-                            {
-                                NavigateToSubmenu(sub);
-                                return 0;
-                            }
+                            NavigateToSubmenu(sub);
+                            return 0;
                         }
                     }
                 }
@@ -1828,7 +1851,7 @@ void PieMenuOverlay::RenderOverlay()
         }
         else if (isSubMenuMode)
         {
-            std::wstring wCTitle = L"◀ Back";
+            std::wstring wCTitle = L"Back";
             Gdiplus::Color cTextCol = centerHovered ? Gdiplus::Color(255, 255, 255, 255) : Gdiplus::Color(240, 160, 180, 210);
             Gdiplus::Font cFont(L"Segoe UI", 7.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
             Gdiplus::SolidBrush cTextBrush(cTextCol);
