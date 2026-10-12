@@ -278,13 +278,6 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
                     return 1;
                 }
 
-                if (PieMenuOverlay::Get().IsActive() &&
-                    (pkb->vkCode == VK_MENU || pkb->vkCode == VK_LMENU || pkb->vkCode == VK_RMENU))
-                {
-                    PieMenuOverlay::Get().OnKeyboardHook((UInt32)pkb->vkCode, (UInt32)wParam);
-                    return 1;
-                }
-
                 PieMenuOverlay::Get().OnKeyboardHook((UInt32)pkb->vkCode, (UInt32)wParam);
             }
         }
@@ -625,6 +618,8 @@ void PieMenuOverlay::CommitAndClose()
         }
     }
 
+    const PieHotkey* rootHk = (!m_profileStack.IsEmpty() && m_profileStack[0]) ? &m_profileStack[0]->hotkey : (m_activeProfile ? &m_activeProfile->hotkey : nullptr);
+
     bool callShift = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
                      ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
                      ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
@@ -634,6 +629,15 @@ void PieMenuOverlay::CommitAndClose()
     bool callAlt   = m_altDown   || ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
                      ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
                      ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+
+    // If the trigger hotkey required a modifier to open the menu, that modifier was part of the trigger,
+    // not an extra action modifier for the slot!
+    if (rootHk && rootHk->enabled)
+    {
+        if (rootHk->shift) callShift = false;
+        if (rootHk->ctrl)  callCtrl  = false;
+        if (rootHk->alt)   callAlt   = false;
+    }
 
     KillTimer((HWND)m_hwnd, TIMER_ID);
     ReleaseCapture();
@@ -664,12 +668,12 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
 {
     // 1. Check if a custom command is configured for the active modifier
     Int32 customCmd = NOTOK;
-    if (shiftDown && slot.shiftCommandId > 0)
+    if (altDown && slot.altCommandId > 0)
+        customCmd = slot.altCommandId;
+    else if (shiftDown && slot.shiftCommandId > 0)
         customCmd = slot.shiftCommandId;
     else if (ctrlDown && slot.ctrlCommandId > 0)
         customCmd = slot.ctrlCommandId;
-    else if (altDown && slot.altCommandId > 0)
-        customCmd = slot.altCommandId;
 
     if (customCmd > 0)
     {
@@ -703,6 +707,8 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
             }
         }
     }
+
+    BaseObject* firstObjBefore = doc->GetFirstObject();
 
     // Execute the command
     CallCommand(baseCmd);
@@ -741,14 +747,43 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
     }
 
     BaseObject* newObj = newObjects.IsEmpty() ? nullptr : newObjects[0];
+    if (!newObj)
+    {
+        BaseObject* activeObj = doc->GetActiveObject();
+        if (activeObj)
+        {
+            bool wasPreviouslySelected = false;
+            for (BaseObject* oldObj : initialSelection)
+            {
+                if (oldObj == activeObj)
+                {
+                    wasPreviouslySelected = true;
+                    break;
+                }
+            }
+            if (!wasPreviouslySelected)
+                newObj = activeObj;
+        }
+    }
+    if (!newObj && doc->GetFirstObject() && doc->GetFirstObject() != firstObjBefore)
+    {
+        newObj = doc->GetFirstObject();
+    }
 
     // CASE 1: Alt modifier (Make Parent of selected objects)
     if (altDown && newObj && !initialSelection.IsEmpty())
     {
+        BaseObject* primary = initialSelection[0];
+        // If Cinema 4D already parented the selection natively:
+        if (primary->GetUp() == newObj)
+        {
+            EventAdd();
+            return;
+        }
+
         doc->StartUndo();
         doc->AddUndo(UNDOTYPE::CHANGE, newObj);
 
-        BaseObject* primary = initialSelection[0];
         Matrix targetMg = primary->GetMg();
         newObj->SetMg(targetMg);
 
@@ -757,6 +792,11 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
         {
             newObj->Remove();
             newObj->InsertUnder(parent);
+        }
+        else
+        {
+            newObj->Remove();
+            newObj->InsertBefore(primary);
         }
 
         for (BaseObject* oldObj : initialSelection)
@@ -779,11 +819,17 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
     {
         if (newObj && !initialSelection.IsEmpty())
         {
+            BaseObject* primary = initialSelection[0];
+            if (newObj->GetUp() == primary)
+            {
+                EventAdd();
+                return;
+            }
+
             // Shift + Object creation -> Make Child of first selected object
             doc->StartUndo();
             doc->AddUndo(UNDOTYPE::CHANGE, newObj);
 
-            BaseObject* primary = initialSelection[0];
             newObj->Remove();
             newObj->InsertUnderLast(primary);
             newObj->SetMl(Matrix()); // Identity local matrix to align with parent
@@ -1178,11 +1224,22 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         }
         else
         {
-            String effTitle = slot.GetEffectiveTitleForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+            const PieHotkey* hk = (!m_profileStack.IsEmpty() && m_profileStack[0]) ? &m_profileStack[0]->hotkey : (m_activeProfile ? &m_activeProfile->hotkey : nullptr);
+            bool actShift = m_shiftDown;
+            bool actCtrl  = m_ctrlDown;
+            bool actAlt   = m_altDown;
+            if (hk && hk->enabled)
+            {
+                if (hk->shift) actShift = false;
+                if (hk->ctrl)  actCtrl  = false;
+                if (hk->alt)   actAlt   = false;
+            }
+
+            String effTitle = slot.GetEffectiveTitleForModifiers(actShift, actCtrl, actAlt);
             String modHint = ""_s;
-            if (m_altDown) modHint = " [ALT: Parent]"_s;
-            else if (m_shiftDown) modHint = " [SHIFT: Child / Options]"_s;
-            else if (m_ctrlDown) modHint = " [CTRL: Origin]"_s;
+            if (actAlt) modHint = " [ALT: Parent]"_s;
+            else if (actShift) modHint = " [SHIFT: Child / Options]"_s;
+            else if (actCtrl) modHint = " [CTRL: Origin]"_s;
 
             StatusSetText(FormatString("Pie Menu [@]: @@ | Release trigger or click to execute"_s, m_activeProfile->name, effTitle, modHint));
         }
@@ -1510,6 +1567,17 @@ void PieMenuOverlay::RenderOverlay()
         PieDisplayMode dispMode = m_activeProfile ? m_activeProfile->displayMode : mgr.m_displayMode;
         float baseIconSz = (float)(m_activeProfile ? ((m_activeProfile->iconSize >= 12.0) ? m_activeProfile->iconSize : 24.0) : ((mgr.m_iconSize >= 12.0) ? mgr.m_iconSize : 24.0));
 
+        const PieHotkey* rootHk = (!m_profileStack.IsEmpty() && m_profileStack[0]) ? &m_profileStack[0]->hotkey : (m_activeProfile ? &m_activeProfile->hotkey : nullptr);
+        bool actShift = m_shiftDown;
+        bool actCtrl  = m_ctrlDown;
+        bool actAlt   = m_altDown;
+        if (rootHk && rootHk->enabled)
+        {
+            if (rootHk->shift) actShift = false;
+            if (rootHk->ctrl)  actCtrl  = false;
+            if (rootHk->alt)   actAlt   = false;
+        }
+
         for (Int32 i = 0; i < count; ++i)
         {
             const PieSlot& slot = m_activeProfile->slots[i];
@@ -1525,14 +1593,14 @@ void PieMenuOverlay::RenderOverlay()
             float midDeg = 270.0f + (float)i * sliceDeg;
             float midRad = midDeg * deg2rad;
 
-            Int32 effectiveCmd = slot.GetCommandForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+            Int32 effectiveCmd = slot.GetCommandForModifiers(actShift, actCtrl, actAlt);
             Gdiplus::Bitmap* pIconBmp = nullptr;
             if (dispMode != PieDisplayMode::LabelOnly && effectiveCmd > 0)
             {
                 pIconBmp = GetOrCreateGdiIcon(effectiveCmd);
             }
 
-            String label = slot.GetEffectiveTitleForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+            String label = slot.GetEffectiveTitleForModifiers(actShift, actCtrl, actAlt);
             if (slot.IsSubMenu())
             {
                 if (label.GetLength() > 9)
@@ -1642,7 +1710,7 @@ void PieMenuOverlay::RenderOverlay()
 
         // 3. Center Hub (CENTER_SLOT_INDEX / deadzone)
         const PieSlot& slot8 = m_activeProfile->slots[CENTER_SLOT_INDEX];
-        Int32 effectiveCenterCmd = slot8.GetCommandForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+        Int32 effectiveCenterCmd = slot8.GetCommandForModifiers(actShift, actCtrl, actAlt);
         Bool centerConfigured = (slot8.enabled && (effectiveCenterCmd > 0 || slot8.IsSubMenu()));
         Bool isSubMenuMode = !m_profileStack.IsEmpty();
         Bool centerHovered = (m_hoveredSlot == CENTER_SLOT_INDEX);
@@ -1834,9 +1902,9 @@ void PieMenuOverlay::RenderOverlay()
 
         // 6. Active modifier indicator badge
         std::wstring modTag;
-        if (m_ctrlDown)  modTag += L"[CTRL] ";
-        if (m_altDown)   modTag += L"[ALT: Parent] ";
-        if (m_shiftDown) modTag += L"[SHIFT: Child / Options] ";
+        if (actCtrl)  modTag += L"[CTRL: Origin] ";
+        if (actAlt)   modTag += L"[ALT: Parent] ";
+        if (actShift) modTag += L"[SHIFT: Child / Options] ";
         if (!modTag.empty())
         {
             Gdiplus::Font mFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);

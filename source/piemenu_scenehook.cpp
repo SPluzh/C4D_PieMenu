@@ -125,6 +125,12 @@ void PieMenuSceneHook::CommitSelection()
 #else
                 bool shiftHeld = false, ctrlHeld = false, altHeld = false;
 #endif
+                if (m_activeProfile && m_activeProfile->hotkey.enabled)
+                {
+                    if (m_activeProfile->hotkey.shift) shiftHeld = false;
+                    if (m_activeProfile->hotkey.ctrl)  ctrlHeld  = false;
+                    if (m_activeProfile->hotkey.alt)   altHeld   = false;
+                }
                 Int32 cmd = slot.GetCommandForModifiers(shiftHeld, ctrlHeld, altHeld);
                 if (cmd > 0)
                 {
