@@ -333,7 +333,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Vector bgCol;
         if (isDragHover)
         {
-            bgCol = Vector(0.24, 0.22, 0.12) + slot.accentColor * 0.25;
+            bgCol = Vector(0.22, 0.24, 0.28) + slot.accentColor * 0.20;
         }
         else if (isDragSource)
         {
@@ -363,7 +363,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         if (stripW < 1.5) stripW = 1.5;
         if (isDragHover)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(1.0, 1.0, 1.0), steps);
         }
         else if (isDragSource)
         {
@@ -399,7 +399,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float borderWidth = 1.0;
         if (isDragHover)
         {
-            borderCol = Vector(1.0, 0.9, 0.15); // Bright gold drag highlight
+            borderCol = Vector(1.0, 1.0, 1.0); // Bright white drag highlight
             borderWidth = 2.5;
         }
         else if (isDragSource)
@@ -475,7 +475,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         Vector textCol;
         if (isDragHover)
-            textCol = Vector(1.0, 0.95, 0.3);
+            textCol = Vector(1.0, 1.0, 1.0);
         else if (isDragSource || isSelected)
             textCol = Vector(1.0, 1.0, 1.0);
         else if (!slot.enabled)
@@ -532,7 +532,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     {
         Float selMidDeg = 270.0 + Float(m_selectedSlot) * sliceDeg;
         Float selMidRad = selMidDeg * deg2rad;
-        Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 0.9, 0.15) : prof->slots[m_selectedSlot].accentColor;
+        Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 1.0, 1.0) : prof->slots[m_selectedSlot].accentColor;
         DrawSetPen(selCol);
         Float sx = cx + std::cos(selMidRad) * (deadzoneRadius + 2.0 * invDpi);
         Float sy = cy + std::sin(selMidRad) * (deadzoneRadius + 2.0 * invDpi);
@@ -553,8 +553,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
     if (isDragHover8)
     {
-        hubBgCol = Vector(0.24, 0.22, 0.12) + slot8.accentColor * 0.25;
-        hubBorderCol = Vector(1.0, 0.9, 0.15);
+        hubBgCol = Vector(0.22, 0.24, 0.28) + slot8.accentColor * 0.20;
+        hubBorderCol = Vector(1.0, 1.0, 1.0);
         hubBorderWidth = 2.5;
     }
     else if (isDragSource8)
@@ -665,7 +665,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         bool ctrlHeld = false;
 #endif
 
-        Vector lineCol = ctrlHeld ? Vector(0.3, 0.95, 0.5) : Vector(1.0, 0.85, 0.2);
+        Vector lineCol = ctrlHeld ? Vector(0.3, 0.95, 0.5) : Vector(1.0, 1.0, 1.0);
         DrawSetPen(lineCol);
         DrawLine((Int32)ptSrc.x, (Int32)ptSrc.y, (Int32)ptDst.x, (Int32)ptDst.y, 2.0);
 
@@ -705,7 +705,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else
         {
-            DrawSetTextCol(Vector(1.0, 0.88, 0.25), COLOR_TRANS);
+            DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
             DrawText("Release to swap slots | Hold Ctrl to duplicate"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
         }
     }
@@ -716,7 +716,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (m_dragHoverSlot != NOTOK)
     {
-        DrawSetTextCol(Vector(1.0, 0.88, 0.25), COLOR_TRANS);
+        DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
         DrawText("Release to assign to slot"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
     }
     else
@@ -748,7 +748,7 @@ Bool PieMenuEditorArea::InputEvent(const BaseContainer& msg)
             SendParentMessage(action);
 
             PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
-            if (prof && (prof->slots[slot].commandId > 0 || prof->slots[slot].IsSubMenu() || prof->slots[slot].customLabel.IsPopulated()))
+            if (prof)
             {
                 m_dragSourceSlot = slot;
                 m_dragHoverSlot = NOTOK;
