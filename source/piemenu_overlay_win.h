@@ -27,6 +27,8 @@ public:
     Bool NavigateBack();
     Bool CanNavigateTo(const PieProfile* profile) const;
 
+    static void SuppressModifierKeys();
+
     void CheckTrigger();
     void OnKeyboardHook(UInt32 vkCode, UInt32 msg);
     void SyncKeysFromAsync();

@@ -134,6 +134,10 @@ void PieMenuSceneHook::CommitSelection()
                 Int32 cmd = slot.GetCommandForModifiers(shiftHeld, ctrlHeld, altHeld);
                 if (cmd > 0)
                 {
+                    if (cmd != slot.commandId || (!shiftHeld && !ctrlHeld && !altHeld))
+                    {
+                        PieMenuOverlay::SuppressModifierKeys();
+                    }
                     CallCommand(cmd);
                 }
             }

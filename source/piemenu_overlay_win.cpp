@@ -715,26 +715,208 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
 #endif
 }
 
+void PieMenuOverlay::SuppressModifierKeys()
+{
+#if defined(MAXON_TARGET_WINDOWS)
+    bool altDown   = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0);
+    bool shiftDown = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+    bool ctrlDown  = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
+
+    if (altDown || shiftDown || ctrlDown)
+    {
+        INPUT inputs[6] = {};
+        int count = 0;
+        if (altDown)
+        {
+            inputs[count].type = INPUT_KEYBOARD;
+            inputs[count].ki.wVk = VK_MENU;
+            inputs[count].ki.dwFlags = KEYEVENTF_KEYUP;
+            count++;
+        }
+        if (shiftDown)
+        {
+            inputs[count].type = INPUT_KEYBOARD;
+            inputs[count].ki.wVk = VK_SHIFT;
+            inputs[count].ki.dwFlags = KEYEVENTF_KEYUP;
+            count++;
+        }
+        if (ctrlDown)
+        {
+            inputs[count].type = INPUT_KEYBOARD;
+            inputs[count].ki.wVk = VK_CONTROL;
+            inputs[count].ki.dwFlags = KEYEVENTF_KEYUP;
+            count++;
+        }
+
+        if (count > 0)
+        {
+            SendInput(count, inputs, sizeof(INPUT));
+        }
+
+        // Clear calling thread's keyboard state table
+        BYTE ks[256];
+        if (GetKeyboardState(ks))
+        {
+            if (altDown)   { ks[VK_MENU] = ks[VK_LMENU] = ks[VK_RMENU] = 0; }
+            if (shiftDown) { ks[VK_SHIFT] = ks[VK_LSHIFT] = ks[VK_RSHIFT] = 0; }
+            if (ctrlDown)  { ks[VK_CONTROL] = ks[VK_LCONTROL] = ks[VK_RCONTROL] = 0; }
+            SetKeyboardState(ks);
+        }
+
+        // Dispatch keyup messages so Cinema 4D processes them immediately
+        MSG msg;
+        while (PeekMessage(&msg, NULL, WM_KEYFIRST, WM_KEYLAST, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+    }
+#endif
+}
+
 void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Bool ctrlDown, Bool altDown)
 {
     // 1. Check if a custom command is configured for the active modifier
     Int32 customCmd = NOTOK;
-    if (altDown && slot.altCommandId > 0)
-        customCmd = slot.altCommandId;
-    else if (shiftDown && slot.shiftCommandId > 0)
+    if (shiftDown && slot.shiftCommandId > 0)
         customCmd = slot.shiftCommandId;
     else if (ctrlDown && slot.ctrlCommandId > 0)
         customCmd = slot.ctrlCommandId;
+    else if (altDown && slot.altCommandId > 0)
+        customCmd = slot.altCommandId;
 
     if (customCmd > 0)
     {
+        BaseDocument* doc = GetActiveDocument();
+        maxon::BaseArray<BaseObject*> initialSelection;
+        maxon::BaseArray<BaseObject*> initialParents;
+        maxon::BaseArray<BaseObject*> initialPreds;
+        if (doc)
+        {
+            AutoAlloc<AtomArray> activeAtomArray;
+            if (activeAtomArray)
+            {
+                doc->GetActiveObjects(*activeAtomArray, GETACTIVEOBJECTFLAGS::CHILDREN);
+                for (Int32 i = 0; i < activeAtomArray->GetCount(); ++i)
+                {
+                    C4DAtom* atom = activeAtomArray->GetIndex(i);
+                    if (atom && atom->IsInstanceOf(Obase))
+                    {
+                        BaseObject* obj = static_cast<BaseObject*>(atom);
+                        initialSelection.Append(obj) iferr_ignore("Append");
+                        initialParents.Append(obj->GetUp()) iferr_ignore("Append");
+                        initialPreds.Append(obj->GetPred()) iferr_ignore("Append");
+                    }
+                }
+            }
+        }
+
+        BaseObject* firstObjBefore = doc ? doc->GetFirstObject() : nullptr;
+
+        // Suppress modifiers in OS / C4D queue so custom command executes cleanly without modifier side-effects
+        SuppressModifierKeys();
+
         CallCommand(customCmd);
+
+        // Safeguard: if Cinema 4D natively parented or childed the initial selection, revert it
+        if (doc && !initialSelection.IsEmpty())
+        {
+            BaseObject* newObj = nullptr;
+            AutoAlloc<AtomArray> postAtomArray;
+            if (postAtomArray)
+            {
+                doc->GetActiveObjects(*postAtomArray, GETACTIVEOBJECTFLAGS::CHILDREN);
+                for (Int32 i = 0; i < postAtomArray->GetCount(); ++i)
+                {
+                    C4DAtom* atom = postAtomArray->GetIndex(i);
+                    if (atom && atom->IsInstanceOf(Obase))
+                    {
+                        BaseObject* cand = static_cast<BaseObject*>(atom);
+                        bool wasOld = false;
+                        for (BaseObject* oldObj : initialSelection)
+                        {
+                            if (oldObj == cand) { wasOld = true; break; }
+                        }
+                        if (!wasOld) { newObj = cand; break; }
+                    }
+                }
+            }
+            if (!newObj)
+            {
+                BaseObject* activeObj = doc->GetActiveObject();
+                if (activeObj)
+                {
+                    bool wasOld = false;
+                    for (BaseObject* oldObj : initialSelection)
+                    {
+                        if (oldObj == activeObj) { wasOld = true; break; }
+                    }
+                    if (!wasOld) newObj = activeObj;
+                }
+            }
+            if (!newObj && doc->GetFirstObject() && doc->GetFirstObject() != firstObjBefore)
+            {
+                newObj = doc->GetFirstObject();
+            }
+
+            if (newObj)
+            {
+                BaseObject* primary = initialSelection[0];
+                if (primary->GetUp() == newObj)
+                {
+                    // Cinema 4D natively made newObj a parent of primary; restore original hierarchy
+                    for (Int32 i = 0; i < (Int32)initialSelection.GetCount(); ++i)
+                    {
+                        BaseObject* oldObj = initialSelection[i];
+                        Matrix oldMg = oldObj->GetMg();
+                        oldObj->Remove();
+                        BaseObject* origParent = (i < (Int32)initialParents.GetCount()) ? initialParents[i] : nullptr;
+                        BaseObject* origPred = (i < (Int32)initialPreds.GetCount()) ? initialPreds[i] : nullptr;
+                        if (origParent)
+                        {
+                            if (origPred) oldObj->InsertAfter(origPred);
+                            else oldObj->InsertUnder(origParent);
+                        }
+                        else
+                        {
+                            if (origPred) oldObj->InsertAfter(origPred);
+                            else doc->InsertObject(oldObj, nullptr, nullptr);
+                        }
+                        oldObj->SetMg(oldMg);
+                    }
+                    EventAdd();
+                }
+                else if (newObj->GetUp() == primary)
+                {
+                    // Cinema 4D natively made newObj a child of primary; move it to be a sibling
+                    Matrix newMg = newObj->GetMg();
+                    newObj->Remove();
+                    BaseObject* parent = primary->GetUp();
+                    if (parent)
+                        newObj->InsertAfter(primary);
+                    else
+                        doc->InsertObject(newObj, nullptr, primary);
+                    newObj->SetMg(newMg);
+                    EventAdd();
+                }
+            }
+        }
+
         return;
     }
 
     Int32 baseCmd = slot.commandId;
     if (baseCmd <= 0)
         return;
+
+    // If no action modifiers were down (e.g. standard click, or modifiers were trigger hotkey only),
+    // suppress any held trigger modifiers so C4D does not execute unwanted modifier behavior!
+    if (!altDown && !shiftDown && !ctrlDown)
+    {
+        SuppressModifierKeys();
+        CallCommand(baseCmd);
+        return;
+    }
 
     BaseDocument* doc = GetActiveDocument();
     if (!doc)
@@ -1356,9 +1538,9 @@ Bool PieMenuOverlay::UpdateHover(Float dx, Float dy)
 
             String effTitle = slot.GetEffectiveTitleForModifiers(actShift, actCtrl, actAlt);
             String modHint = ""_s;
-            if (actAlt) modHint = " [ALT: Parent]"_s;
-            else if (actShift) modHint = " [SHIFT: Child / Options]"_s;
-            else if (actCtrl) modHint = " [CTRL: Origin]"_s;
+            if (actAlt && slot.altCommandId <= 0) modHint = " [ALT: Parent]"_s;
+            else if (actShift && slot.shiftCommandId <= 0) modHint = " [SHIFT: Child / Options]"_s;
+            else if (actCtrl && slot.ctrlCommandId <= 0) modHint = " [CTRL: Origin]"_s;
 
             StatusSetText(FormatString("Pie Menu [@]: @@ | Release trigger or click to execute"_s, m_activeProfile->name, effTitle, modHint));
         }
@@ -2064,9 +2246,33 @@ void PieMenuOverlay::RenderOverlay()
 
         // 6. Active modifier indicator badge
         std::wstring modTag;
-        if (actCtrl)  modTag += L"[CTRL: Origin] ";
-        if (actAlt)   modTag += L"[ALT: Parent] ";
-        if (actShift) modTag += L"[SHIFT: Child / Options] ";
+        const PieSlot* hoveredSlotPtr = nullptr;
+        if (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && (m_hoveredSlot < count || m_hoveredSlot == CENTER_SLOT_INDEX))
+        {
+            hoveredSlotPtr = &m_activeProfile->slots[m_hoveredSlot];
+        }
+
+        if (actCtrl)
+        {
+            if (hoveredSlotPtr && hoveredSlotPtr->ctrlCommandId > 0)
+                modTag += L"[CTRL] ";
+            else
+                modTag += L"[CTRL: Origin] ";
+        }
+        if (actAlt)
+        {
+            if (hoveredSlotPtr && hoveredSlotPtr->altCommandId > 0)
+                modTag += L"[ALT] ";
+            else
+                modTag += L"[ALT: Parent] ";
+        }
+        if (actShift)
+        {
+            if (hoveredSlotPtr && hoveredSlotPtr->shiftCommandId > 0)
+                modTag += L"[SHIFT] ";
+            else
+                modTag += L"[SHIFT: Child / Options] ";
+        }
         if (!modTag.empty())
         {
             Gdiplus::Font mFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
