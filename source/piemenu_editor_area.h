@@ -30,6 +30,8 @@ public:
 
     Int32 GetDragSourceSlot() const { return m_dragSourceSlot; }
 
+    Float GetDpiScale() const;
+
 private:
     Int32 m_profileIndex = 0;
     Int32 m_selectedSlot = 0;

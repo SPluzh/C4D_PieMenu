@@ -16,10 +16,61 @@ PieMenuEditorArea::PieMenuEditorArea()
 {
 }
 
+Float PieMenuEditorArea::GetDpiScale() const
+{
+    Float scale = 1.0;
+#if defined(MAXON_TARGET_WINDOWS)
+    UINT dpi = 0;
+    HWND hwnd = nullptr;
+    if (dlg)
+    {
+        hwnd = (HWND)dlg->GetWindowHandle();
+    }
+    if (hwnd)
+    {
+        typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+        static GetDpiForWindowFn pGetDpiForWindow = (GetDpiForWindowFn)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForWindow");
+        if (pGetDpiForWindow)
+        {
+            dpi = pGetDpiForWindow(hwnd);
+        }
+    }
+    if (dpi == 0)
+    {
+        typedef UINT (WINAPI *GetDpiForSystemFn)();
+        static GetDpiForSystemFn pGetDpiForSystem = (GetDpiForSystemFn)GetProcAddress(GetModuleHandleW(L"user32.dll"), "GetDpiForSystem");
+        if (pGetDpiForSystem)
+        {
+            dpi = pGetDpiForSystem();
+        }
+    }
+    if (dpi == 0)
+    {
+        HDC hdc = GetDC(NULL);
+        if (hdc)
+        {
+            dpi = (UINT)GetDeviceCaps(hdc, LOGPIXELSX);
+            ReleaseDC(NULL, hdc);
+        }
+    }
+    if (dpi > 0)
+    {
+        scale = Float(dpi) / 96.0;
+    }
+#endif
+    if (scale < 0.25)
+        scale = 1.0;
+    return scale;
+}
+
 Bool PieMenuEditorArea::GetMinSize(Int32& w, Int32& h)
 {
-    w = 360;
-    h = 320;
+    Float dpiScale = GetDpiScale();
+    Float invDpi = (dpiScale > 0.05) ? (1.0 / dpiScale) : 1.0;
+    w = (Int32)(360.0 * invDpi);
+    h = (Int32)(320.0 * invDpi);
+    if (w < 200) w = 200;
+    if (h < 180) h = 180;
     return true;
 }
 
@@ -52,11 +103,14 @@ Int32 PieMenuEditorArea::GetSlotUnderCoord(Int32 x, Int32 y) const
     if (!prof)
         return NOTOK;
 
+    Float dpiScale = GetDpiScale();
+    Float invDpi = (dpiScale > 0.05) ? (1.0 / dpiScale) : 1.0;
+
     Float rVal = prof->radius;
     Float dzVal = prof->deadzone;
     Float radiusScale = (rVal > 20.0) ? (rVal / 85.0) : 1.0;
-    Float deadzoneRadius = (dzVal > 0.0) ? dzVal : 26.0;
-    Float maxOuterR = 125.0 * radiusScale + 15.0;
+    Float deadzoneRadius = ((dzVal > 0.0) ? dzVal : 26.0) * invDpi;
+    Float maxOuterR = (125.0 * radiusScale + 15.0) * invDpi;
 
     if (dist < deadzoneRadius)
         return 8; // Center Slot
@@ -237,15 +291,18 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
     PieProfileManager& mgr = PieProfileManager::Get();
 
-    // Circular layout dimensions matching real pie menu dimensions
+    Float dpiScale = GetDpiScale();
+    Float invDpi = (dpiScale > 0.05) ? (1.0 / dpiScale) : 1.0;
+
+    // Circular layout dimensions matching real pie menu dimensions (compensated for GUI DPI scaling)
     Float rVal = prof ? prof->radius : mgr.m_radius;
     Float dzVal = prof ? prof->deadzone : mgr.m_deadzone;
     Float radiusScale = (rVal > 20.0) ? (rVal / 85.0) : 1.0;
-    const Float deadzoneRadius = (dzVal > 0.0) ? dzVal : 26.0;
-    const Float baseInnerR = 36.0 * radiusScale;
-    const Float baseOuterR = 112.0 * radiusScale;
-    const Float hoverInnerR = 33.0 * radiusScale;
-    const Float hoverOuterR = 125.0 * radiusScale; // Pops out by 13px on selection / drag-hover
+    const Float deadzoneRadius = ((dzVal > 0.0) ? dzVal : 26.0) * invDpi;
+    const Float baseInnerR = (36.0 * radiusScale) * invDpi;
+    const Float baseOuterR = (112.0 * radiusScale) * invDpi;
+    const Float hoverInnerR = (33.0 * radiusScale) * invDpi;
+    const Float hoverOuterR = (125.0 * radiusScale) * invDpi; // Pops out by 13px on selection / drag-hover
 
     Int32 count = prof->slotCount;
     if (count != 4 && count != 8)
@@ -302,7 +359,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         drawAnnularSectorPoly(cx, cy, rIn, rOut, aStart, aEnd, bgCol, steps);
 
         // Active / Selected illuminated inner arc strip
-        Float stripW = isSelectedOrHovered ? (4.5 * radiusScale) : (3.0 * radiusScale);
+        Float stripW = (isSelectedOrHovered ? (4.5 * radiusScale) : (3.0 * radiusScale)) * invDpi;
+        if (stripW < 1.5) stripW = 1.5;
         if (isDragHover)
         {
             drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
@@ -429,11 +487,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         Bool isVisible = (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0 || slot.IsSubMenu());
 
-        Float curIconSz = (isSelectedOrHovered ? (baseIconSz * 1.15) : baseIconSz) * radiusScale;
+        Float curIconSz = ((isSelectedOrHovered ? (baseIconSz * 1.15) : baseIconSz) * radiusScale) * invDpi;
         if (curIconSz > (rOut - rIn) * 0.85)
             curIconSz = (rOut - rIn) * 0.85;
-        if (curIconSz < 10.0)
-            curIconSz = 10.0;
+        if (curIconSz < 8.0)
+            curIconSz = 8.0;
         Int32 sz = (Int32)curIconSz;
 
         if (dispMode == PieDisplayMode::IconOnly && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
@@ -446,9 +504,9 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         else if (dispMode == PieDisplayMode::IconAndLabel && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Position icon slightly closer to inner ring, text slightly closer to outer ring
-            Float offset = (baseIconSz * 0.45 + 2.0) * radiusScale;
+            Float offset = ((baseIconSz * 0.45 + 2.0) * radiusScale) * invDpi;
             Float rIcon = rMid - offset;
-            Float rLabel = rMid + offset + 2.0 * radiusScale;
+            Float rLabel = rMid + offset + (2.0 * radiusScale) * invDpi;
 
             Float ix = cx + std::cos(midRad) * rIcon;
             Float iy = cy + std::sin(midRad) * rIcon;
@@ -476,10 +534,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float selMidRad = selMidDeg * deg2rad;
         Vector selCol = (m_dragHoverSlot == m_selectedSlot) ? Vector(1.0, 0.9, 0.15) : prof->slots[m_selectedSlot].accentColor;
         DrawSetPen(selCol);
-        Float sx = cx + std::cos(selMidRad) * (deadzoneRadius + 2.0);
-        Float sy = cy + std::sin(selMidRad) * (deadzoneRadius + 2.0);
-        Float ex = cx + std::cos(selMidRad) * (hoverInnerR - 2.0);
-        Float ey = cy + std::sin(selMidRad) * (hoverInnerR - 2.0);
+        Float sx = cx + std::cos(selMidRad) * (deadzoneRadius + 2.0 * invDpi);
+        Float sy = cy + std::sin(selMidRad) * (deadzoneRadius + 2.0 * invDpi);
+        Float ex = cx + std::cos(selMidRad) * (hoverInnerR - 2.0 * invDpi);
+        Float ey = cy + std::sin(selMidRad) * (hoverInnerR - 2.0 * invDpi);
         DrawLine((Int32)sx, (Int32)sy, (Int32)ex, (Int32)ey, 1.5);
     }
 
@@ -568,14 +626,14 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     else
     {
         // Crosshair at center
-        Float chSize = (4.0 * radiusScale < deadzoneRadius * 0.35) ? (4.0 * radiusScale) : (deadzoneRadius * 0.35);
-        if (chSize < 2.5) chSize = 2.5;
+        Float chSize = (4.0 * radiusScale * invDpi < deadzoneRadius * 0.35) ? (4.0 * radiusScale * invDpi) : (deadzoneRadius * 0.35);
+        if (chSize < 2.0) chSize = 2.0;
         DrawSetPen(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60));
         DrawLine((Int32)(cx - chSize), (Int32)cy, (Int32)(cx + chSize), (Int32)cy, 1.0);
         DrawLine((Int32)cx, (Int32)(cy - chSize), (Int32)cx, (Int32)(cy + chSize), 1.0);
 
         DrawSetTextCol(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60), COLOR_TRANS);
-        Float textOff = (7.0 < deadzoneRadius * 0.3) ? 7.0 : (deadzoneRadius * 0.3);
+        Float textOff = (7.0 * invDpi < deadzoneRadius * 0.3) ? (7.0 * invDpi) : (deadzoneRadius * 0.3);
         DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + textOff), DRAWTEXT_HALIGN_CENTER);
     }
 
@@ -627,7 +685,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     {
         String badge = "["_s + prof->name + "]"_s;
         DrawSetTextCol(Vector(0.50, 0.70, 0.90), COLOR_TRANS);
-        DrawText(badge, (Int32)cx, (Int32)(cy - hoverOuterR - 16.0), DRAWTEXT_HALIGN_CENTER);
+        DrawText(badge, (Int32)cx, (Int32)(cy - hoverOuterR - 16.0 * invDpi), DRAWTEXT_HALIGN_CENTER);
     }
 
     // 8. Bottom hint
