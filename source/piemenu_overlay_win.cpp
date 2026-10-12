@@ -913,9 +913,8 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         return;
     }
 
-    PieProfileManager& mgr = PieProfileManager::Get();
     Float dist = std::sqrt(dx * dx + dy * dy);
-    const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+    const Float deadzone = (m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0;
 
     if (dist < deadzone)
     {
@@ -1133,8 +1132,8 @@ void PieMenuOverlay::RenderOverlay()
         const float cx = (float)(OVERLAY_SIZE * 0.5f);
         const float cy = (float)(OVERLAY_SIZE * 0.5f);
 
-        float radiusScale = (float)((mgr.m_radius > 60.0) ? (mgr.m_radius / 85.0) : 1.0);
-        const float deadzoneRadius = (float)((mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0);
+        float radiusScale = (float)((m_activeProfile->radius > 20.0) ? (m_activeProfile->radius / 85.0) : 1.0);
+        const float deadzoneRadius = (float)((m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0);
         const float baseInnerR = 36.0f * radiusScale;
         const float baseOuterR = 112.0f * radiusScale;
         const float hoverInnerR = 33.0f * radiusScale;

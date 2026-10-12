@@ -12,6 +12,7 @@ static const Int32 PIE_CONFIG_MAGIC_V2 = 0x50494532; // "PIE2"
 static const Int32 PIE_CONFIG_MAGIC_V3 = 0x50494533; // "PIE3"
 static const Int32 PIE_CONFIG_MAGIC_V4 = 0x50494534; // "PIE4"
 static const Int32 PIE_CONFIG_MAGIC_V5 = 0x50494535; // "PIE5"
+static const Int32 PIE_CONFIG_MAGIC_V6 = 0x50494536; // "PIE6"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -665,6 +666,8 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     j.Set("context", C4DStringToStdString(GetContextShortName(prof.context)));
     j.Set("slotCount", (int64_t)prof.slotCount);
     j.Set("showTitle", (bool)prof.showTitle);
+    j.Set("radius", (double)prof.radius);
+    j.Set("deadzone", (double)prof.deadzone);
     j.Set("iconSize", (double)prof.iconSize);
     j.Set("displayMode", (int64_t)prof.displayMode);
 
@@ -734,6 +737,8 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     int sc = (int)jProf.GetInt("slotCount", 8);
     outProf.slotCount = (sc == 4) ? 4 : 8;
     outProf.showTitle = jProf.GetBool("showTitle", true);
+    outProf.radius = (Float)jProf.GetNumber("radius", 85.0);
+    outProf.deadzone = (Float)jProf.GetNumber("deadzone", 26.0);
     outProf.iconSize = (Float)jProf.GetNumber("iconSize", 24.0);
     outProf.displayMode = (PieDisplayMode)(int)jProf.GetInt("displayMode", 0);
 
@@ -809,7 +814,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V5)
+    if (firstVal == PIE_CONFIG_MAGIC_V6)
+    {
+        version = 6;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V5)
     {
         version = 5;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
@@ -895,8 +906,19 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.showTitle = true;
         }
 
-        if (version >= 5)
+        if (version >= 6)
         {
+            file->ReadFloat64(&prof.radius);
+            file->ReadFloat64(&prof.deadzone);
+            file->ReadFloat64(&prof.iconSize);
+            Int32 inDisp = 0;
+            file->ReadInt32(&inDisp);
+            prof.displayMode = (PieDisplayMode)inDisp;
+        }
+        else if (version >= 5)
+        {
+            prof.radius = 85.0;
+            prof.deadzone = 26.0;
             file->ReadFloat64(&prof.iconSize);
             Int32 inDisp = 0;
             file->ReadInt32(&inDisp);
@@ -904,6 +926,8 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
         }
         else
         {
+            prof.radius = 85.0;
+            prof.deadzone = 26.0;
             prof.iconSize = 24.0;
             prof.displayMode = PieDisplayMode::IconAndLabel;
         }
@@ -924,6 +948,16 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
         if (file->ReadInt32(&inDispMode))
         {
             outDisplayMode = (PieDisplayMode)inDispMode;
+        }
+    }
+
+    // For files prior to V6, populate each profile with the global radius and deadzone
+    if (version < 6)
+    {
+        for (Int32 p = 0; p < (Int32)outProfiles.GetCount(); ++p)
+        {
+            outProfiles[p].radius = outRadius;
+            outProfiles[p].deadzone = outDeadzone;
         }
     }
 
@@ -1026,7 +1060,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1207,6 +1241,13 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
         m_profiles.Reset();
         for (Int32 i = 0; i < (Int32)parsedProfiles.GetCount(); ++i)
         {
+            if (hasParsedSettings)
+            {
+                if (parsedProfiles[i].radius == 85.0 && parsedRadius != 85.0)
+                    parsedProfiles[i].radius = parsedRadius;
+                if (parsedProfiles[i].deadzone == 26.0 && parsedDeadzone != 26.0)
+                    parsedProfiles[i].deadzone = parsedDeadzone;
+            }
             m_profiles.Append(parsedProfiles[i]) iferr_ignore("Append");
         }
         if (hasParsedSettings)
@@ -1222,6 +1263,13 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
         // Append
         for (Int32 i = 0; i < (Int32)parsedProfiles.GetCount(); ++i)
         {
+            if (hasParsedSettings)
+            {
+                if (parsedProfiles[i].radius == 85.0 && parsedRadius != 85.0)
+                    parsedProfiles[i].radius = parsedRadius;
+                if (parsedProfiles[i].deadzone == 26.0 && parsedDeadzone != 26.0)
+                    parsedProfiles[i].deadzone = parsedDeadzone;
+            }
             m_profiles.Append(parsedProfiles[i]) iferr_ignore("Append");
         }
     }
@@ -1236,8 +1284,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V5 header to denote per-profile iconSize and displayMode format
-    file->WriteInt32(PIE_CONFIG_MAGIC_V5);
+    // Write magic V6 header to denote per-profile sizing and display format
+    file->WriteInt32(PIE_CONFIG_MAGIC_V6);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1266,6 +1314,8 @@ Bool PieProfileManager::SaveToFile()
 
         file->WriteBool(prof.showTitle);
 
+        file->WriteFloat64(prof.radius);
+        file->WriteFloat64(prof.deadzone);
         file->WriteFloat64(prof.iconSize);
         file->WriteInt32((Int32)prof.displayMode);
     }
@@ -1368,6 +1418,8 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
         p.slots[s].enabled = true;
     }
 
+    p.radius = m_radius;
+    p.deadzone = m_deadzone;
     p.iconSize = m_iconSize;
     p.displayMode = m_displayMode;
 

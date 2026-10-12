@@ -19,7 +19,7 @@ PieMenuEditorArea::PieMenuEditorArea()
 Bool PieMenuEditorArea::GetMinSize(Int32& w, Int32& h)
 {
     w = 360;
-    h = 360;
+    h = 320;
     return true;
 }
 
@@ -48,19 +48,25 @@ Int32 PieMenuEditorArea::GetSlotUnderCoord(Int32 x, Int32 y) const
     Float dy = Float(y) - cy;
     Float dist = std::sqrt(dx * dx + dy * dy);
 
-    if (dist < 32.0)
-        return 8; // Center Slot
-
-    if (dist > 165.0)
-        return NOTOK;
-
     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
     if (!prof)
         return NOTOK;
 
+    Float rVal = prof->radius;
+    Float dzVal = prof->deadzone;
+    Float radiusScale = (rVal > 20.0) ? (rVal / 85.0) : 1.0;
+    Float deadzoneRadius = (dzVal > 0.0) ? dzVal : 26.0;
+    Float maxOuterR = 125.0 * radiusScale + 15.0;
+
+    if (dist < deadzoneRadius)
+        return 8; // Center Slot
+
+    if (dist > maxOuterR)
+        return NOTOK;
+
     Float angleRad = std::atan2(dy, dx);
     Float deg = angleRad * (180.0 / PI);
-    Int32 slot = prof->AngleToSlot(deg, dist, 32.0);
+    Int32 slot = prof->AngleToSlot(deg, dist, deadzoneRadius);
     if (slot >= 0 && slot < prof->slotCount)
         return slot;
 
@@ -229,12 +235,17 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawPolyLine(maxon::Block<const Vector2d>(pts, idx), true, lineWidth);
     };
 
-    // Circular layout dimensions matching QuadDraw style
-    const Float deadzoneRadius = 30.0;
-    const Float baseInnerR = 40.0;
-    const Float baseOuterR = 142.0;
-    const Float hoverInnerR = 36.0;
-    const Float hoverOuterR = 152.0; // Pops out by 10px on selection / drag-hover
+    PieProfileManager& mgr = PieProfileManager::Get();
+
+    // Circular layout dimensions matching real pie menu dimensions
+    Float rVal = prof ? prof->radius : mgr.m_radius;
+    Float dzVal = prof ? prof->deadzone : mgr.m_deadzone;
+    Float radiusScale = (rVal > 20.0) ? (rVal / 85.0) : 1.0;
+    const Float deadzoneRadius = (dzVal > 0.0) ? dzVal : 26.0;
+    const Float baseInnerR = 36.0 * radiusScale;
+    const Float baseOuterR = 112.0 * radiusScale;
+    const Float hoverInnerR = 33.0 * radiusScale;
+    const Float hoverOuterR = 125.0 * radiusScale; // Pops out by 13px on selection / drag-hover
 
     Int32 count = prof->slotCount;
     if (count != 4 && count != 8)
@@ -291,21 +302,22 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         drawAnnularSectorPoly(cx, cy, rIn, rOut, aStart, aEnd, bgCol, steps);
 
         // Active / Selected illuminated inner arc strip
+        Float stripW = isSelectedOrHovered ? (4.5 * radiusScale) : (3.0 * radiusScale);
         if (isDragHover)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(1.0, 0.9, 0.15), steps);
         }
         else if (isDragSource)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, Vector(0.25, 0.70, 1.0), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(0.25, 0.70, 1.0), steps);
         }
         else if (isSelected)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + 5.0, aStart, aEnd, slot.accentColor, steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, slot.accentColor, steps);
         }
         else if (slot.enabled && (slot.commandId > 0 || slot.IsSubMenu()))
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + 3.5, aStart, aEnd, slot.accentColor * 0.65, steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, slot.accentColor * 0.65, steps);
         }
     }
 
@@ -362,15 +374,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
 
     // 3. Draw Labels and Icons inside each segment
-    PieProfileManager& mgr = PieProfileManager::Get();
     PieDisplayMode dispMode = prof ? prof->displayMode : mgr.m_displayMode;
-    Float previewIconSz = prof ? prof->iconSize : mgr.m_iconSize;
-    if (previewIconSz < 12.0)
-        previewIconSz = 24.0;
-    if (previewIconSz > 32.0)
-        previewIconSz = 32.0;
-    else if (previewIconSz < 14.0)
-        previewIconSz = 14.0;
+    Float baseIconSz = prof ? prof->iconSize : mgr.m_iconSize;
+    if (baseIconSz < 12.0)
+        baseIconSz = 24.0;
+    if (baseIconSz > 64.0)
+        baseIconSz = 64.0;
 
     for (Int32 i = 0; i < count; ++i)
     {
@@ -420,24 +429,29 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         Bool isVisible = (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0 || slot.IsSubMenu());
 
+        Float curIconSz = (isSelectedOrHovered ? (baseIconSz * 1.15) : baseIconSz) * radiusScale;
+        if (curIconSz > (rOut - rIn) * 0.85)
+            curIconSz = (rOut - rIn) * 0.85;
+        if (curIconSz < 10.0)
+            curIconSz = 10.0;
+        Int32 sz = (Int32)curIconSz;
+
         if (dispMode == PieDisplayMode::IconOnly && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Only icon: centered at rMid
             Float ix = cx + std::cos(midRad) * rMid;
             Float iy = cy + std::sin(midRad) * rMid;
-            Int32 sz = (Int32)previewIconSz;
             DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
         }
         else if (dispMode == PieDisplayMode::IconAndLabel && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Position icon slightly closer to inner ring, text slightly closer to outer ring
-            Float offset = previewIconSz * 0.5 + 2.0;
+            Float offset = (baseIconSz * 0.45 + 2.0) * radiusScale;
             Float rIcon = rMid - offset;
-            Float rLabel = rMid + offset + 2.0;
+            Float rLabel = rMid + offset + 2.0 * radiusScale;
 
             Float ix = cx + std::cos(midRad) * rIcon;
             Float iy = cy + std::sin(midRad) * rIcon;
-            Int32 sz = (Int32)previewIconSz;
             DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
 
             Float lx = cx + std::cos(midRad) * rLabel;
@@ -529,7 +543,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         if (hasIcon8)
         {
-            Int32 sz = (Int32)previewIconSz;
+            Float hubIconSz = (isSelected8 || isDragHover8 || isDragSource8 ? (baseIconSz * 1.1) : baseIconSz) * (deadzoneRadius / 26.0);
+            if (hubIconSz > deadzoneRadius * 1.6)
+                hubIconSz = deadzoneRadius * 1.6;
+            if (hubIconSz < 10.0)
+                hubIconSz = 10.0;
+            Int32 sz = (Int32)hubIconSz;
             DrawBitmap(icon.bmp, (Int32)(cx - sz * 0.5), (Int32)(cy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
         }
         else
@@ -549,12 +568,15 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     else
     {
         // Crosshair at center
+        Float chSize = (4.0 * radiusScale < deadzoneRadius * 0.35) ? (4.0 * radiusScale) : (deadzoneRadius * 0.35);
+        if (chSize < 2.5) chSize = 2.5;
         DrawSetPen(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60));
-        DrawLine((Int32)(cx - 3.5), (Int32)cy, (Int32)(cx + 3.5), (Int32)cy, 1.0);
-        DrawLine((Int32)cx, (Int32)(cy - 3.5), (Int32)cx, (Int32)(cy + 3.5), 1.0);
+        DrawLine((Int32)(cx - chSize), (Int32)cy, (Int32)(cx + chSize), (Int32)cy, 1.0);
+        DrawLine((Int32)cx, (Int32)(cy - chSize), (Int32)cx, (Int32)(cy + chSize), 1.0);
 
         DrawSetTextCol(isSelected8 ? slot8.accentColor : Vector(0.50, 0.54, 0.60), COLOR_TRANS);
-        DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + 7), DRAWTEXT_HALIGN_CENTER);
+        Float textOff = (7.0 < deadzoneRadius * 0.3) ? 7.0 : (deadzoneRadius * 0.3);
+        DrawText((!slot8.enabled && !isSelected8) ? "Off"_s : "Hub"_s, (Int32)cx, (Int32)(cy + textOff), DRAWTEXT_HALIGN_CENTER);
     }
 
     // 6. Dynamic visual swap/move connection link between source and target slots

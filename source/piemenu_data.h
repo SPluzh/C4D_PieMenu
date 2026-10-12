@@ -74,6 +74,8 @@ struct PieProfile
     Bool           showTitle = true;
     PieSlot        slots[9];      // 0..7 radial, 8 is Center
     PieHotkey      hotkey;
+    Float          radius = 85.0;
+    Float          deadzone = 26.0;
     Float          iconSize = 24.0;
     PieDisplayMode displayMode = PieDisplayMode::IconAndLabel;
 

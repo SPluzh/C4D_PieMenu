@@ -65,12 +65,11 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
         return;
     }
 
-    PieProfileManager& mgr = PieProfileManager::Get();
     Float dx = curX - m_originX;
     Float dy = curY - m_originY;
     Float dist = std::sqrt(dx * dx + dy * dy);
 
-    const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+    const Float deadzone = (m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0;
 
     if (dist < deadzone)
     {
@@ -137,8 +136,6 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
 {
     if (!bd || !m_active || !m_activeProfile)
         return;
-
-    PieProfileManager& mgr = PieProfileManager::Get();
 
     bd->SetMatrix_Screen();
     bd->SetDrawParam(DRAW_PARAMETER_USE_Z, GeData(false));
@@ -228,8 +225,8 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     };
 
     // Radii & spacing (proportional scaling if user customized radius)
-    Float radiusScale = (mgr.m_radius > 60.0) ? (mgr.m_radius / 85.0) : 1.0;
-    const Float deadzoneRadius = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+    Float radiusScale = (m_activeProfile->radius > 20.0) ? (m_activeProfile->radius / 85.0) : 1.0;
+    const Float deadzoneRadius = (m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0;
     const Float baseInnerR = 36.0 * radiusScale;
     const Float baseOuterR = 112.0 * radiusScale;
     const Float hoverInnerR = 33.0 * radiusScale;
