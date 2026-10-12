@@ -14,6 +14,7 @@ static const Int32 PIE_CONFIG_MAGIC_V4 = 0x50494534; // "PIE4"
 static const Int32 PIE_CONFIG_MAGIC_V5 = 0x50494535; // "PIE5"
 static const Int32 PIE_CONFIG_MAGIC_V6 = 0x50494536; // "PIE6"
 static const Int32 PIE_CONFIG_MAGIC_V7 = 0x50494537; // "PIE7"
+static const Int32 PIE_CONFIG_MAGIC_V8 = 0x50494538; // "PIE8"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -233,6 +234,29 @@ Bool PieSlot::GetIconBitmap(IconData& outIcon) const
     if (commandId > 0)
     {
         return GetIcon(commandId, &outIcon);
+    }
+    return false;
+}
+
+maxon::String PieSlot::GetEffectiveTitleForModifiers(Bool shift, Bool ctrl, Bool alt) const
+{
+    Int32 cmd = GetCommandForModifiers(shift, ctrl, alt);
+    if (cmd > 0 && cmd != commandId)
+    {
+        String name = GetCommandName(cmd);
+        if (name.IsPopulated())
+            return name;
+        return FormatString("Cmd @"_s, cmd);
+    }
+    return GetEffectiveTitle();
+}
+
+Bool PieSlot::GetIconBitmapForModifiers(Bool shift, Bool ctrl, Bool alt, IconData& outIcon) const
+{
+    Int32 cmd = GetCommandForModifiers(shift, ctrl, alt);
+    if (cmd > 0)
+    {
+        return GetIcon(cmd, &outIcon);
     }
     return false;
 }
@@ -696,6 +720,12 @@ static JsonValue ProfileToJson(const PieProfile& prof)
         }
         if (slot.customLabel.IsPopulated())
             jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
+        if (slot.shiftCommandId > 0)
+            jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
+        if (slot.ctrlCommandId > 0)
+            jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
+        if (slot.altCommandId > 0)
+            jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
 
         JsonValue jCol = JsonValue::Array();
         jCol.Push(slot.accentColor.x);
@@ -724,6 +754,12 @@ static JsonValue ProfileToJson(const PieProfile& prof)
         }
         if (slot.customLabel.IsPopulated())
             jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
+        if (slot.shiftCommandId > 0)
+            jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
+        if (slot.ctrlCommandId > 0)
+            jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
+        if (slot.altCommandId > 0)
+            jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
 
         JsonValue jCol = JsonValue::Array();
         jCol.Push(slot.accentColor.x);
@@ -813,6 +849,9 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
             if (idx >= 0 && idx < TOTAL_SLOT_COUNT)
             {
                 outProf.slots[idx].commandId = (Int32)jSlot.GetInt("commandId", NOTOK);
+                outProf.slots[idx].shiftCommandId = (Int32)jSlot.GetInt("shiftCommandId", NOTOK);
+                outProf.slots[idx].ctrlCommandId = (Int32)jSlot.GetInt("ctrlCommandId", NOTOK);
+                outProf.slots[idx].altCommandId = (Int32)jSlot.GetInt("altCommandId", NOTOK);
                 std::string sub = jSlot.GetString("subMenuName", "");
                 outProf.slots[idx].subMenuName = StdStringToC4DString(sub);
                 std::string lbl = jSlot.GetString("customLabel", "");
@@ -847,7 +886,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V7)
+    if (firstVal == PIE_CONFIG_MAGIC_V8)
+    {
+        version = 8;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V7)
     {
         version = 7;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
@@ -914,7 +959,21 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.slots[s].enabled = true;
         }
 
-        if (version >= 7)
+        if (version >= 8)
+        {
+            for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
+            {
+                file->ReadInt32(&prof.slots[s].commandId);
+                file->ReadString(&prof.slots[s].customLabel);
+                file->ReadVector64(&prof.slots[s].accentColor);
+                file->ReadBool(&prof.slots[s].enabled);
+                file->ReadString(&prof.slots[s].subMenuName);
+                file->ReadInt32(&prof.slots[s].shiftCommandId);
+                file->ReadInt32(&prof.slots[s].ctrlCommandId);
+                file->ReadInt32(&prof.slots[s].altCommandId);
+            }
+        }
+        else if (version >= 7)
         {
             for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
             {
@@ -1357,8 +1416,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V7 header to denote per-profile sizing, display format and up to 24 slots
-    file->WriteInt32(PIE_CONFIG_MAGIC_V7);
+    // Write magic V8 header to denote modifier commands support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V8);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1377,6 +1436,9 @@ Bool PieProfileManager::SaveToFile()
             file->WriteVector64(prof.slots[s].accentColor);
             file->WriteBool(prof.slots[s].enabled);
             file->WriteString(prof.slots[s].subMenuName);
+            file->WriteInt32(prof.slots[s].shiftCommandId);
+            file->WriteInt32(prof.slots[s].ctrlCommandId);
+            file->WriteInt32(prof.slots[s].altCommandId);
         }
 
         file->WriteBool(prof.hotkey.enabled);

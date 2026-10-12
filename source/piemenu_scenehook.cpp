@@ -116,9 +116,20 @@ void PieMenuSceneHook::CommitSelection()
                     m_hoveredSlot = NOTOK;
                 }
             }
-            else if (slot.commandId > 0)
+            else if (slot.commandId > 0 || slot.HasModifierCommands())
             {
-                CallCommand(slot.commandId);
+#if defined(MAXON_TARGET_WINDOWS)
+                bool shiftHeld = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0);
+                bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0);
+                bool altHeld = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0);
+#else
+                bool shiftHeld = false, ctrlHeld = false, altHeld = false;
+#endif
+                Int32 cmd = slot.GetCommandForModifiers(shiftHeld, ctrlHeld, altHeld);
+                if (cmd > 0)
+                {
+                    CallCommand(cmd);
+                }
             }
         }
     }

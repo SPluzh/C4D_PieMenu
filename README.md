@@ -22,6 +22,14 @@
   - Optional profile title badge above the menu.
   - **Inactive Slots as Gaps**: Inactive or unassigned slots can appear as clean gaps, keeping your most-used commands clearly separated and easy to hit.
 
+- **Modifier Keys Support (Alt, Shift, Ctrl)**:
+  - **Native C4D Modifier Behaviors**:
+    - **Alt**: Automatically nests selected objects as children of the newly created generator/primitive (e.g. Subdivision Surface, Null, Boole) with bounding-box matching and undo integration.
+    - **Shift**: Automatically nests the newly created deformer/object as a child of selected objects with local transform reset; for interactive modeling tools (e.g. Extrude, Bevel), instantly opens their tool options dialog.
+    - **Ctrl**: Spawns newly created objects directly at the world origin `(0, 0, 0)`.
+  - **Custom Modifier Actions Override**: Assign distinct alternative Cinema 4D commands for `Shift`, `Ctrl`, and `Alt` to any slot (radial or center hub).
+  - **Live Dynamic HUD Feedback**: Holding modifier keys while the menu is open updates slot icons and titles in real time and displays an active modifier badge (`[ALT: Parent]`, `[SHIFT: Child / Options]`, `[CTRL]`).
+
 - **Nested Submenus Support**: Any slot (radial or central) can be linked to another created Pie Menu profile:
   - **Press & Flick into Submenu**: Hovering over a submenu slot for ~240ms expands the submenu centered under your cursor; continue flicking to execute the desired command in one fluid stroke!
   - **Click Navigation**: Click or release on a submenu slot to pin it open and browse choices.
@@ -48,12 +56,14 @@
   - **Submenus Tab**: Browse all created profiles with item count and context badges. Double-click or drag any menu onto a pie slot to link it as a submenu! Includes `+ New Submenu` and `Assign to Slot` buttons.
 - **Drag & Drop Assignment & Slot Rearrangement**:
   - Drag commands or submenus directly onto radial slots or the slot inspector.
+  - **Drag & Drop with Modifiers**: Hold `Shift`, `Ctrl`, or `Alt` while dragging to assign commands directly to that modifier action.
   - **Drag & Drop Slot Reordering**: Freely click and drag slots directly on the pie canvas to swap or move them to different positions. Hold `Ctrl` while dragging to duplicate a slot.
   - Double-clicking a command or submenu assigns it to the active slot.
 - **Interactive Radial Canvas**: Real-time visual canvas displaying dynamic 2 to 24 slot layouts, icons, labels, accent colors, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
 - **Detailed Slot Inspector**:
   - **Submenu Link Dropdown**: Select any existing menu to link as a submenu, with an **`Edit Menu ->`** button to jump straight to editing that submenu.
   - Custom Command ID or name.
+  - **Dedicated Modifier Actions**: Inspect and customize `Shift`, `Ctrl`, and `Alt` actions with one-click **`Set Sel`** (captures selected palette command) and **`Reset`** buttons.
   - Custom Label overrides.
   - Custom Accent Color picker per slot.
   - Enable / Disable slot toggle.
@@ -81,6 +91,9 @@
 | **Hold Configured Hotkey** | Instantly opens the radial pie menu under the cursor |
 | **Move Mouse** | Highlights the targeted slot with popout and laser pointer |
 | **Release Hotkey** | Executes the active slot command immediately (**Press & Flick**) |
+| **Hold Alt while executing** | Makes new generator/object parent of selection (or custom Alt action) |
+| **Hold Shift while executing** | Makes new deformer child of selection, or opens tool options (or custom Shift action) |
+| **Hold Ctrl while executing** | Places newly created object at world origin (or custom Ctrl action) |
 | **Hover Submenu Slot (~240ms)** | Expands submenu under cursor; flick into any submenu command |
 | **LMB Click** | Executes command, or pins and opens a submenu slot |
 | **Center Hub (`◀ Back`)** | In submenu: returns to parent menu |

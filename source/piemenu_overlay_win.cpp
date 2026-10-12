@@ -278,6 +278,13 @@ static LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lP
                     return 1;
                 }
 
+                if (PieMenuOverlay::Get().IsActive() &&
+                    (pkb->vkCode == VK_MENU || pkb->vkCode == VK_LMENU || pkb->vkCode == VK_RMENU))
+                {
+                    PieMenuOverlay::Get().OnKeyboardHook((UInt32)pkb->vkCode, (UInt32)wParam);
+                    return 1;
+                }
+
                 PieMenuOverlay::Get().OnKeyboardHook((UInt32)pkb->vkCode, (UInt32)wParam);
             }
         }
@@ -605,18 +612,28 @@ void PieMenuOverlay::CommitAndClose()
         }
     }
 
-    Int32 commandToCall = NOTOK;
-    String slotTitle = "None"_s;
+    PieSlot slotToCall;
+    bool hasSlotToCall = false;
 
     if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-        if (slot.enabled && slot.commandId > 0 && !slot.IsSubMenu())
+        if (slot.enabled && !slot.IsSubMenu() && (slot.commandId > 0 || slot.HasModifierCommands()))
         {
-            commandToCall = slot.commandId;
-            slotTitle = slot.GetEffectiveTitle();
+            slotToCall = slot;
+            hasSlotToCall = true;
         }
     }
+
+    bool callShift = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+    bool callCtrl  = m_ctrlDown  || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+    bool callAlt   = m_altDown   || ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
+                     ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
 
     KillTimer((HWND)m_hwnd, TIMER_ID);
     ReleaseCapture();
@@ -636,11 +653,168 @@ void PieMenuOverlay::CommitAndClose()
     m_lastHoveredSlot = NOTOK;
     m_pinnedOpen = false;
 
-    if (commandToCall > 0)
+    if (hasSlotToCall)
     {
-        CallCommand(commandToCall);
+        ExecuteSlotCommand(slotToCall, callShift, callCtrl, callAlt);
     }
 #endif
+}
+
+void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Bool ctrlDown, Bool altDown)
+{
+    // 1. Check if a custom command is configured for the active modifier
+    Int32 customCmd = NOTOK;
+    if (shiftDown && slot.shiftCommandId > 0)
+        customCmd = slot.shiftCommandId;
+    else if (ctrlDown && slot.ctrlCommandId > 0)
+        customCmd = slot.ctrlCommandId;
+    else if (altDown && slot.altCommandId > 0)
+        customCmd = slot.altCommandId;
+
+    if (customCmd > 0)
+    {
+        CallCommand(customCmd);
+        return;
+    }
+
+    Int32 baseCmd = slot.commandId;
+    if (baseCmd <= 0)
+        return;
+
+    BaseDocument* doc = GetActiveDocument();
+    if (!doc)
+    {
+        CallCommand(baseCmd);
+        return;
+    }
+
+    // Collect currently selected objects in document before running the command
+    maxon::BaseArray<BaseObject*> initialSelection;
+    AutoAlloc<AtomArray> activeAtomArray;
+    if (activeAtomArray)
+    {
+        doc->GetActiveObjects(*activeAtomArray, GETACTIVEOBJECTFLAGS::CHILDREN);
+        for (Int32 i = 0; i < activeAtomArray->GetCount(); ++i)
+        {
+            C4DAtom* atom = activeAtomArray->GetIndex(i);
+            if (atom && atom->IsInstanceOf(Obase))
+            {
+                initialSelection.Append(static_cast<BaseObject*>(atom)) iferr_ignore("Append");
+            }
+        }
+    }
+
+    // Execute the command
+    CallCommand(baseCmd);
+
+    // If no modifiers were down, standard execution is finished
+    if (!altDown && !shiftDown && !ctrlDown)
+        return;
+
+    // Check what objects are selected after command execution to find newly created object(s)
+    maxon::BaseArray<BaseObject*> newObjects;
+    AutoAlloc<AtomArray> postAtomArray;
+    if (postAtomArray)
+    {
+        doc->GetActiveObjects(*postAtomArray, GETACTIVEOBJECTFLAGS::CHILDREN);
+        for (Int32 i = 0; i < postAtomArray->GetCount(); ++i)
+        {
+            C4DAtom* atom = postAtomArray->GetIndex(i);
+            if (atom && atom->IsInstanceOf(Obase))
+            {
+                BaseObject* cand = static_cast<BaseObject*>(atom);
+                bool wasPreviouslySelected = false;
+                for (BaseObject* oldObj : initialSelection)
+                {
+                    if (oldObj == cand)
+                    {
+                        wasPreviouslySelected = true;
+                        break;
+                    }
+                }
+                if (!wasPreviouslySelected)
+                {
+                    newObjects.Append(cand) iferr_ignore("Append");
+                }
+            }
+        }
+    }
+
+    BaseObject* newObj = newObjects.IsEmpty() ? nullptr : newObjects[0];
+
+    // CASE 1: Alt modifier (Make Parent of selected objects)
+    if (altDown && newObj && !initialSelection.IsEmpty())
+    {
+        doc->StartUndo();
+        doc->AddUndo(UNDOTYPE::CHANGE, newObj);
+
+        BaseObject* primary = initialSelection[0];
+        Matrix targetMg = primary->GetMg();
+        newObj->SetMg(targetMg);
+
+        BaseObject* parent = primary->GetUp();
+        if (parent)
+        {
+            newObj->Remove();
+            newObj->InsertUnder(parent);
+        }
+
+        for (BaseObject* oldObj : initialSelection)
+        {
+            Matrix oldMg = oldObj->GetMg();
+            doc->AddUndo(UNDOTYPE::CHANGE, oldObj);
+            oldObj->Remove();
+            oldObj->InsertUnderLast(newObj);
+            oldObj->SetMg(oldMg); // maintain world transform
+        }
+
+        doc->AddUndo(UNDOTYPE::NEWOBJ, newObj);
+        doc->EndUndo();
+        EventAdd();
+        return;
+    }
+
+    // CASE 2: Shift modifier
+    if (shiftDown)
+    {
+        if (newObj && !initialSelection.IsEmpty())
+        {
+            // Shift + Object creation -> Make Child of first selected object
+            doc->StartUndo();
+            doc->AddUndo(UNDOTYPE::CHANGE, newObj);
+
+            BaseObject* primary = initialSelection[0];
+            newObj->Remove();
+            newObj->InsertUnderLast(primary);
+            newObj->SetMl(Matrix()); // Identity local matrix to align with parent
+
+            doc->AddUndo(UNDOTYPE::NEWOBJ, newObj);
+            doc->EndUndo();
+            EventAdd();
+            return;
+        }
+        else if (!newObj)
+        {
+            // Shift + Tool/Modeling command -> Open Command Option dialog
+            BaseContainer msg(COREMSG_CINEMA_EXECUTEEDITORCOMMAND);
+            msg.SetInt32(COREMSG_CINEMA_EXECUTEEDITORCOMMAND, baseCmd);
+            msg.SetInt32(COREMSG_CINEMA_EXECUTESUBID, 0);
+            msg.SetInt32(COREMSG_CINEMA_EXECUTEOPTIONMODE, true);
+            SendCoreMessage(COREMSG_CINEMA, msg, 0);
+            return;
+        }
+    }
+
+    // CASE 3: Ctrl modifier (Place at world origin)
+    if (ctrlDown && newObj)
+    {
+        doc->StartUndo();
+        doc->AddUndo(UNDOTYPE::CHANGE, newObj);
+        newObj->SetMg(Matrix()); // Origin (0,0,0)
+        doc->EndUndo();
+        EventAdd();
+        return;
+    }
 }
 
 void PieMenuOverlay::CancelAndClose()
@@ -731,19 +905,53 @@ Bool PieMenuOverlay::IsHotkeyTriggered(const PieHotkey& hk) const
 
 Bool PieMenuOverlay::IsTriggerHeld() const
 {
-    // When navigated into a submenu hierarchy, the trigger hotkey being held
-    // is ALWAYS the hotkey of the root menu profile that opened the pie menu session!
+    const PieHotkey* hk = nullptr;
     if (!m_profileStack.IsEmpty() && m_profileStack[0])
     {
-        return IsHotkeyTriggered(m_profileStack[0]->hotkey);
+        hk = &m_profileStack[0]->hotkey;
     }
-
-    if (m_activeProfile)
+    else if (m_activeProfile)
     {
-        return IsHotkeyTriggered(m_activeProfile->hotkey);
+        hk = &m_activeProfile->hotkey;
     }
 
+    if (!hk || !hk->enabled)
+        return false;
+
+#if defined(MAXON_TARGET_WINDOWS)
+    bool cDown = m_ctrlDown || ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+    bool sDown = m_shiftDown || ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+    bool aDown = m_altDown || ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) ||
+                 ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+
+    // If the trigger hotkey required Ctrl/Shift/Alt, they must still be held.
+    // If not required by the trigger hotkey, pressing extra modifier keys is ALLOWED (they act as slot modifiers)!
+    if (hk->ctrl && !cDown)
+        return false;
+    if (hk->shift && !sDown)
+        return false;
+    if (hk->alt && !aDown)
+        return false;
+
+    if (hk->vkCode == 0)
+    {
+        return (hk->ctrl || hk->shift || hk->alt);
+    }
+
+    Int32 vk = hk->vkCode;
+    if (vk >= 'a' && vk <= 'z')
+        vk = toupper(vk);
+
+    bool kDown = (m_currentKeyDown == (UInt32)vk) || ((GetAsyncKeyState(vk) & 0x8000) != 0);
+    return kDown;
+#else
     return false;
+#endif
 }
 
 void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
@@ -797,6 +1005,11 @@ void PieMenuOverlay::OnKeyboardHook(UInt32 vkCode, UInt32 msg)
             m_currentKeyDown = vkCode;
         else if (m_currentKeyDown == vkCode)
             m_currentKeyDown = 0;
+    }
+
+    if (m_active && isMod)
+    {
+        RenderOverlay();
     }
 
     CheckTrigger();
@@ -965,7 +1178,13 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         }
         else
         {
-            StatusSetText(FormatString("Pie Menu [@]: @ | Release trigger to execute"_s, m_activeProfile->name, slot.GetEffectiveTitle()));
+            String effTitle = slot.GetEffectiveTitleForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+            String modHint = ""_s;
+            if (m_altDown) modHint = " [ALT: Parent]"_s;
+            else if (m_shiftDown) modHint = " [SHIFT: Child / Options]"_s;
+            else if (m_ctrlDown) modHint = " [CTRL: Origin]"_s;
+
+            StatusSetText(FormatString("Pie Menu [@]: @@ | Release trigger or click to execute"_s, m_activeProfile->name, effTitle, modHint));
         }
     }
     else
@@ -1306,13 +1525,14 @@ void PieMenuOverlay::RenderOverlay()
             float midDeg = 270.0f + (float)i * sliceDeg;
             float midRad = midDeg * deg2rad;
 
+            Int32 effectiveCmd = slot.GetCommandForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
             Gdiplus::Bitmap* pIconBmp = nullptr;
-            if (dispMode != PieDisplayMode::LabelOnly && slot.commandId > 0)
+            if (dispMode != PieDisplayMode::LabelOnly && effectiveCmd > 0)
             {
-                pIconBmp = GetOrCreateGdiIcon(slot.commandId);
+                pIconBmp = GetOrCreateGdiIcon(effectiveCmd);
             }
 
-            String label = slot.GetEffectiveTitle();
+            String label = slot.GetEffectiveTitleForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
             if (slot.IsSubMenu())
             {
                 if (label.GetLength() > 9)
@@ -1341,7 +1561,7 @@ void PieMenuOverlay::RenderOverlay()
 
             std::wstring wLabel = ToWString(label);
 
-            Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
+            Bool hasAction = (effectiveCmd > 0 || slot.IsSubMenu());
             Gdiplus::Color textCol;
             if (isHovered)
             {
@@ -1422,7 +1642,8 @@ void PieMenuOverlay::RenderOverlay()
 
         // 3. Center Hub (CENTER_SLOT_INDEX / deadzone)
         const PieSlot& slot8 = m_activeProfile->slots[CENTER_SLOT_INDEX];
-        Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
+        Int32 effectiveCenterCmd = slot8.GetCommandForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
+        Bool centerConfigured = (slot8.enabled && (effectiveCenterCmd > 0 || slot8.IsSubMenu()));
         Bool isSubMenuMode = !m_profileStack.IsEmpty();
         Bool centerHovered = (m_hoveredSlot == CENTER_SLOT_INDEX);
 
@@ -1508,7 +1729,7 @@ void PieMenuOverlay::RenderOverlay()
         Gdiplus::Pen hubPen(hubBorderCol, centerHovered ? 2.0f : 1.2f);
         g.DrawPath(&hubPen, &hubPath);
 
-        Gdiplus::Bitmap* pIconBmp8 = (dispMode != PieDisplayMode::LabelOnly && slot8.commandId > 0) ? GetOrCreateGdiIcon(slot8.commandId) : nullptr;
+        Gdiplus::Bitmap* pIconBmp8 = (dispMode != PieDisplayMode::LabelOnly && effectiveCenterCmd > 0) ? GetOrCreateGdiIcon(effectiveCenterCmd) : nullptr;
 
         if (centerConfigured && pIconBmp8 != nullptr)
         {
@@ -1527,7 +1748,7 @@ void PieMenuOverlay::RenderOverlay()
         }
         else if (centerConfigured)
         {
-            String cText = slot8.GetEffectiveTitle();
+            String cText = slot8.GetEffectiveTitleForModifiers(m_shiftDown, m_ctrlDown, m_altDown);
             if (slot8.IsSubMenu())
                 cText += " >"_s;
             std::wstring wCTitle = ToWString(cText);
@@ -1609,6 +1830,21 @@ void PieMenuOverlay::RenderOverlay()
             float bY = cy - hoverOuterR - 22.0f;
             g.DrawString(wBadge.c_str(), -1, &bFont, Gdiplus::PointF(cx + 1.0f, bY + 1.0f), &format, &bShadow);
             g.DrawString(wBadge.c_str(), -1, &bFont, Gdiplus::PointF(cx, bY), &format, &bBrush);
+        }
+
+        // 6. Active modifier indicator badge
+        std::wstring modTag;
+        if (m_ctrlDown)  modTag += L"[CTRL] ";
+        if (m_altDown)   modTag += L"[ALT: Parent] ";
+        if (m_shiftDown) modTag += L"[SHIFT: Child / Options] ";
+        if (!modTag.empty())
+        {
+            Gdiplus::Font mFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+            Gdiplus::SolidBrush mShadow(Gdiplus::Color(200, 0, 0, 0));
+            Gdiplus::SolidBrush mBrush(Gdiplus::Color(255, 255, 210, 80)); // Warm gold badge
+            float mY = cy + hoverOuterR + 18.0f;
+            g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx + 1.0f, mY + 1.0f), &format, &mShadow);
+            g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx, mY), &format, &mBrush);
         }
     }
 

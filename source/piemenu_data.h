@@ -26,10 +26,29 @@ struct PieSlot
     maxon::String customLabel;
     Vector        accentColor = Vector(0.25, 0.65, 1.0);
     Bool          enabled = true;
+    Int32         shiftCommandId = NOTOK;
+    Int32         ctrlCommandId = NOTOK;
+    Int32         altCommandId = NOTOK;
 
     Bool IsSubMenu() const { return subMenuName.IsPopulated(); }
     maxon::String GetEffectiveTitle() const;
     Bool GetIconBitmap(IconData& outIcon) const;
+
+    Int32 GetCommandForModifiers(Bool shift, Bool ctrl, Bool alt) const
+    {
+        if (shift && shiftCommandId > 0) return shiftCommandId;
+        if (ctrl && ctrlCommandId > 0) return ctrlCommandId;
+        if (alt && altCommandId > 0) return altCommandId;
+        return commandId;
+    }
+
+    Bool HasModifierCommands() const
+    {
+        return (shiftCommandId > 0 || ctrlCommandId > 0 || altCommandId > 0);
+    }
+
+    maxon::String GetEffectiveTitleForModifiers(Bool shift, Bool ctrl, Bool alt) const;
+    Bool GetIconBitmapForModifiers(Bool shift, Bool ctrl, Bool alt, IconData& outIcon) const;
 };
 
 enum class PieDisplayMode

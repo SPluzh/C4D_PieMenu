@@ -34,6 +34,15 @@ enum
     IDC_INSPECTOR_CMD_ID,
     IDC_INSPECTOR_CMD_NAME,
     IDC_INSPECTOR_COLOR_FIELD,
+    IDC_INSPECTOR_SHIFT_LABEL,
+    IDC_INSPECTOR_SHIFT_SET,
+    IDC_INSPECTOR_SHIFT_CLEAR,
+    IDC_INSPECTOR_CTRL_LABEL,
+    IDC_INSPECTOR_CTRL_SET,
+    IDC_INSPECTOR_CTRL_CLEAR,
+    IDC_INSPECTOR_ALT_LABEL,
+    IDC_INSPECTOR_ALT_SET,
+    IDC_INSPECTOR_ALT_CLEAR,
     IDC_INSPECTOR_CLEAR_SLOT,
     IDC_GLOBAL_RADIUS,
     IDC_GLOBAL_DEADZONE,
@@ -728,6 +737,30 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddStaticText(0, BFH_LEFT, 0, 0, "Accent Color:"_s, 0);
     AddColorField(IDC_INSPECTOR_COLOR_FIELD, BFH_LEFT, 60, 18);
 
+    AddStaticText(0, BFH_LEFT, 0, 0, "Shift Action:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddStaticText(IDC_INSPECTOR_SHIFT_LABEL, BFH_SCALEFIT, 110, 0, "Default (Child / Options)"_s, 0);
+    AddButton(IDC_INSPECTOR_SHIFT_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddButton(IDC_INSPECTOR_SHIFT_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
+    GroupEnd();
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Ctrl Action:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddStaticText(IDC_INSPECTOR_CTRL_LABEL, BFH_SCALEFIT, 110, 0, "Default (World Origin)"_s, 0);
+    AddButton(IDC_INSPECTOR_CTRL_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddButton(IDC_INSPECTOR_CTRL_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
+    GroupEnd();
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Alt Action:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddStaticText(IDC_INSPECTOR_ALT_LABEL, BFH_SCALEFIT, 110, 0, "Default (Make Parent)"_s, 0);
+    AddButton(IDC_INSPECTOR_ALT_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddButton(IDC_INSPECTOR_ALT_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
+    GroupEnd();
+
     AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
     AddButton(IDC_INSPECTOR_CLEAR_SLOT, BFH_LEFT, 110, 0, "Clear Slot"_s);
 
@@ -1330,6 +1363,48 @@ void PieMenuEditorDialog::UpdateInspector()
     Enable(IDC_INSPECTOR_CMD_ID, !slot.IsSubMenu());
     SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
     SetColorField(IDC_INSPECTOR_COLOR_FIELD, slot.accentColor, 1.0, 1.0, 0);
+
+    // Shift action
+    if (slot.shiftCommandId > 0)
+    {
+        String scName = GetCommandName(slot.shiftCommandId);
+        if (scName.IsEmpty()) scName = FormatString("Cmd @"_s, slot.shiftCommandId);
+        SetString(IDC_INSPECTOR_SHIFT_LABEL, scName);
+    }
+    else
+    {
+        SetString(IDC_INSPECTOR_SHIFT_LABEL, "Default (Child / Options)"_s);
+    }
+    Enable(IDC_INSPECTOR_SHIFT_SET, !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_SHIFT_CLEAR, !slot.IsSubMenu() && slot.shiftCommandId > 0);
+
+    // Ctrl action
+    if (slot.ctrlCommandId > 0)
+    {
+        String ccName = GetCommandName(slot.ctrlCommandId);
+        if (ccName.IsEmpty()) ccName = FormatString("Cmd @"_s, slot.ctrlCommandId);
+        SetString(IDC_INSPECTOR_CTRL_LABEL, ccName);
+    }
+    else
+    {
+        SetString(IDC_INSPECTOR_CTRL_LABEL, "Default (World Origin)"_s);
+    }
+    Enable(IDC_INSPECTOR_CTRL_SET, !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_CTRL_CLEAR, !slot.IsSubMenu() && slot.ctrlCommandId > 0);
+
+    // Alt action
+    if (slot.altCommandId > 0)
+    {
+        String acName = GetCommandName(slot.altCommandId);
+        if (acName.IsEmpty()) acName = FormatString("Cmd @"_s, slot.altCommandId);
+        SetString(IDC_INSPECTOR_ALT_LABEL, acName);
+    }
+    else
+    {
+        SetString(IDC_INSPECTOR_ALT_LABEL, "Default (Make Parent)"_s);
+    }
+    Enable(IDC_INSPECTOR_ALT_SET, !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_ALT_CLEAR, !slot.IsSubMenu() && slot.altCommandId > 0);
 }
 
 void PieMenuEditorDialog::ApplyInspectorChanges()
@@ -1665,6 +1740,111 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             break;
         }
 
+        case IDC_INSPECTOR_SHIFT_SET:
+        {
+            if (m_selectedCommand && m_selectedCommand->id > 0)
+            {
+                PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                if (prof)
+                {
+                    Int32 sel = m_userArea.GetSelectedSlot();
+                    if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                    {
+                        prof->slots[sel].shiftCommandId = m_selectedCommand->id;
+                        UpdateInspector();
+                        m_userArea.Redraw();
+                    }
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_SHIFT_CLEAR:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    prof->slots[sel].shiftCommandId = NOTOK;
+                    UpdateInspector();
+                    m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_CTRL_SET:
+        {
+            if (m_selectedCommand && m_selectedCommand->id > 0)
+            {
+                PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                if (prof)
+                {
+                    Int32 sel = m_userArea.GetSelectedSlot();
+                    if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                    {
+                        prof->slots[sel].ctrlCommandId = m_selectedCommand->id;
+                        UpdateInspector();
+                        m_userArea.Redraw();
+                    }
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_CTRL_CLEAR:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    prof->slots[sel].ctrlCommandId = NOTOK;
+                    UpdateInspector();
+                    m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_ALT_SET:
+        {
+            if (m_selectedCommand && m_selectedCommand->id > 0)
+            {
+                PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                if (prof)
+                {
+                    Int32 sel = m_userArea.GetSelectedSlot();
+                    if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                    {
+                        prof->slots[sel].altCommandId = m_selectedCommand->id;
+                        UpdateInspector();
+                        m_userArea.Redraw();
+                    }
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_ALT_CLEAR:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    prof->slots[sel].altCommandId = NOTOK;
+                    UpdateInspector();
+                    m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
         case IDC_INSPECTOR_CLEAR_SLOT:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
@@ -1676,6 +1856,9 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     prof->slots[sel].commandId = NOTOK;
                     prof->slots[sel].subMenuName = ""_s;
                     prof->slots[sel].customLabel = ""_s;
+                    prof->slots[sel].shiftCommandId = NOTOK;
+                    prof->slots[sel].ctrlCommandId = NOTOK;
+                    prof->slots[sel].altCommandId = NOTOK;
                     UpdateInspector();
                     m_userArea.Redraw();
                 }

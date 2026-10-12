@@ -716,8 +716,33 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (m_dragHoverSlot != NOTOK)
     {
-        DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
-        DrawText("Release to assign to slot"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+#if defined(MAXON_TARGET_WINDOWS)
+        bool shiftHeld = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+        bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+        bool altHeld = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+#else
+        bool shiftHeld = false, ctrlHeld = false, altHeld = false;
+#endif
+        if (shiftHeld)
+        {
+            DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
+            DrawText("Release to assign as [SHIFT] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
+        else if (ctrlHeld)
+        {
+            DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
+            DrawText("Release to assign as [CTRL] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
+        else if (altHeld)
+        {
+            DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
+            DrawText("Release to assign as [ALT] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
+        else
+        {
+            DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
+            DrawText("Release to assign | Hold Shift/Ctrl/Alt for modifier action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        }
     }
     else
     {
@@ -859,9 +884,32 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
                     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
                     if (prof && cmdId > 0 && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && (m_dragHoverSlot < prof->slotCount || m_dragHoverSlot == CENTER_SLOT_INDEX))
                     {
-                        prof->slots[m_dragHoverSlot].commandId = cmdId;
-                        prof->slots[m_dragHoverSlot].subMenuName = ""_s;
-                        prof->slots[m_dragHoverSlot].customLabel = GetCommandName(cmdId);
+#if defined(MAXON_TARGET_WINDOWS)
+                        bool shiftHeld = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+                        bool ctrlHeld = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+                        bool altHeld = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+#else
+                        bool shiftHeld = false, ctrlHeld = false, altHeld = false;
+#endif
+                        if (shiftHeld)
+                        {
+                            prof->slots[m_dragHoverSlot].shiftCommandId = cmdId;
+                        }
+                        else if (ctrlHeld)
+                        {
+                            prof->slots[m_dragHoverSlot].ctrlCommandId = cmdId;
+                        }
+                        else if (altHeld)
+                        {
+                            prof->slots[m_dragHoverSlot].altCommandId = cmdId;
+                        }
+                        else
+                        {
+                            prof->slots[m_dragHoverSlot].commandId = cmdId;
+                            prof->slots[m_dragHoverSlot].subMenuName = ""_s;
+                            prof->slots[m_dragHoverSlot].customLabel = GetCommandName(cmdId);
+                        }
+
                         prof->slots[m_dragHoverSlot].enabled = true;
                         m_selectedSlot = m_dragHoverSlot;
 

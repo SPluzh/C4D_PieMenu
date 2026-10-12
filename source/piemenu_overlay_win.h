@@ -42,6 +42,7 @@ private:
 
     void UpdateHover(Float dx, Float dy);
     void RenderOverlay();
+    void ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Bool ctrlDown, Bool altDown);
 
     Bool        m_initialized = false;
     Bool        m_active = false;
