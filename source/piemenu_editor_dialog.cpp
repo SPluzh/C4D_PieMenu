@@ -22,7 +22,7 @@ enum
     IDC_GROUP_MENU_SETTINGS,
     IDC_PROFILE_NAME_EDIT,
     IDC_PROFILE_CONTEXT_COMBO,
-    IDC_SLOTCOUNT_COMBO,
+    IDC_SLOTCOUNT_SLIDER,
     IDC_PROFILE_SHOW_TITLE,
 
     IDC_USERAREA_PIE,
@@ -128,26 +128,57 @@ static Int32 KeyComboIndexToVkCode(Int32 idx)
     return 0;
 }
 
-static const Char* s_slotNames8[9] = {
-    "North (Up)",
-    "North-East (Up-Right)",
-    "East (Right)",
-    "South-East (Down-Right)",
-    "South (Down)",
-    "South-West (Down-Left)",
-    "West (Left)",
-    "North-West (Up-Left)",
-    "Center (Hub)"
-};
+static maxon::String GetSlotDisplayName(Int32 slotCount, Int32 sel)
+{
+    if (sel == CENTER_SLOT_INDEX)
+        return "Center (Hub)"_s;
 
-static const Char* s_slotNames4[9] = {
-    "North (Up)",
-    "East (Right)",
-    "South (Down)",
-    "West (Left)",
-    "-", "-", "-", "-",
-    "Center (Hub)"
-};
+    if (slotCount < MIN_SLOT_COUNT) slotCount = MIN_SLOT_COUNT;
+    if (slotCount > MAX_SLOT_COUNT) slotCount = MAX_SLOT_COUNT;
+
+    if (sel < 0 || sel >= slotCount)
+        return "Invalid Slot"_s;
+
+    if (slotCount == 4)
+    {
+        switch (sel)
+        {
+            case 0: return "North (Up)"_s;
+            case 1: return "East (Right)"_s;
+            case 2: return "South (Down)"_s;
+            case 3: return "West (Left)"_s;
+            default: break;
+        }
+    }
+    else if (slotCount == 8)
+    {
+        switch (sel)
+        {
+            case 0: return "North (Up)"_s;
+            case 1: return "North-East (Up-Right)"_s;
+            case 2: return "East (Right)"_s;
+            case 3: return "South-East (Down-Right)"_s;
+            case 4: return "South (Down)"_s;
+            case 5: return "South-West (Down-Left)"_s;
+            case 6: return "West (Left)"_s;
+            case 7: return "North-West (Up-Left)"_s;
+            default: break;
+        }
+    }
+
+    // Dynamic 16-point compass & clock angles for arbitrary slot counts (2..24)
+    Float deg = (Float)sel * (360.0 / (Float)slotCount);
+    static const Char* s_compass16[16] = {
+        "N (12:00)", "NNE", "NE", "ENE",
+        "E (3:00)",  "ESE", "SE", "SSE",
+        "S (6:00)",  "SSW", "SW", "WSW",
+        "W (9:00)",  "WNW", "NW", "NNW"
+    };
+    Int32 compIdx = (Int32)((deg + 11.25) / 22.5) % 16;
+    if (compIdx < 0) compIdx = 0;
+
+    return FormatString("Slot @: @ (@deg)"_s, sel + 1, s_compass16[compIdx], (Int32)deg);
+}
 
 // ============================================================================
 // COMMAND LIST TREE VIEW FUNCTIONS IMPLEMENTATION
@@ -620,8 +651,8 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 120, 0);
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
     AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_LEFT, 140, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Slots:"_s, 0);
-    AddComboBox(IDC_SLOTCOUNT_COMBO, BFH_LEFT, 80, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Slots (2-24):"_s, 0);
+    AddEditSlider(IDC_SLOTCOUNT_SLIDER, BFH_LEFT, 90, 0);
     AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
     GroupEnd();
 
@@ -889,7 +920,7 @@ void PieMenuEditorDialog::AssignCommandToSelectedSlot(Int32 cmdId)
         return;
 
     Int32 sel = m_userArea.GetSelectedSlot();
-    if (sel < 0 || sel > 8)
+    if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         sel = 0;
 
     prof->slots[sel].commandId = cmdId;
@@ -912,7 +943,7 @@ void PieMenuEditorDialog::AssignSubmenuToSelectedSlot(const maxon::String& subMe
         return;
 
     Int32 sel = m_userArea.GetSelectedSlot();
-    if (sel < 0 || sel > 8)
+    if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         sel = 0;
 
     prof->slots[sel].subMenuName = subMenuName;
@@ -989,10 +1020,6 @@ Bool PieMenuEditorDialog::InitValues()
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Objects, GetContextName(PieContextMode::Objects));
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::UV, GetContextName(PieContextMode::UV));
 
-    // Populate slot counts
-    FreeChildren(IDC_SLOTCOUNT_COMBO);
-    AddChild(IDC_SLOTCOUNT_COMBO, 0, "4 Slots"_s);
-    AddChild(IDC_SLOTCOUNT_COMBO, 1, "8 Slots"_s);
 
     FreeChildren(IDC_GLOBAL_DISPLAY_MODE);
     AddChild(IDC_GLOBAL_DISPLAY_MODE, 0, "Icon and Label"_s);
@@ -1048,7 +1075,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
 
     SetString(IDC_PROFILE_NAME_EDIT, prof->name);
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
-    SetInt32(IDC_SLOTCOUNT_COMBO, (prof->slotCount == 4) ? 0 : 1);
+    SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
 
     SetFloat(IDC_GLOBAL_RADIUS, prof->radius, 40.0, 250.0, 1.0);
@@ -1073,9 +1100,13 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     if (GetInt32(IDC_PROFILE_CONTEXT_COMBO, ctx))
         prof->context = (PieContextMode)ctx;
 
-    Int32 sc = 0;
-    if (GetInt32(IDC_SLOTCOUNT_COMBO, sc))
-        prof->slotCount = (sc == 0) ? 4 : 8;
+    Int32 sc = 8;
+    if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
+    {
+        if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
+        if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+        prof->slotCount = sc;
+    }
 
     Bool st = true;
     if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
@@ -1267,14 +1298,14 @@ void PieMenuEditorDialog::UpdateInspector()
     if (!prof)
         return;
 
-    SetInt32(IDC_SLOTCOUNT_COMBO, (prof->slotCount == 4) ? 0 : 1);
+    SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
 
     Int32 sel = m_userArea.GetSelectedSlot();
-    if (sel < 0 || sel > 8)
+    if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         sel = 0;
 
-    const Char* slotName = (prof->slotCount == 4) ? s_slotNames4[sel] : s_slotNames8[sel];
-    SetString(IDC_INSPECTOR_SLOT_TITLE, String(slotName));
+    String slotName = GetSlotDisplayName(prof->slotCount, sel);
+    SetString(IDC_INSPECTOR_SLOT_TITLE, slotName);
 
     const PieSlot& slot = prof->slots[sel];
     SetBool(IDC_INSPECTOR_ENABLED, slot.enabled);
@@ -1309,7 +1340,7 @@ void PieMenuEditorDialog::ApplyInspectorChanges()
         return;
 
     Int32 sel = m_userArea.GetSelectedSlot();
-    if (sel < 0 || sel > 8)
+    if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         return;
 
     PieSlot& slot = prof->slots[sel];
@@ -1511,17 +1542,26 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             break;
         }
 
-        case IDC_SLOTCOUNT_COMBO:
+        case IDC_SLOTCOUNT_SLIDER:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
             if (prof)
             {
-                Int32 sc = 0;
-                if (GetInt32(IDC_SLOTCOUNT_COMBO, sc))
+                Int32 sc = 8;
+                if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
                 {
-                    prof->slotCount = (sc == 0) ? 4 : 8;
-                    m_userArea.Redraw();
-                    UpdateInspector();
+                    if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
+                    if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+                    if (prof->slotCount != sc)
+                    {
+                        prof->slotCount = sc;
+                        Int32 sel = m_userArea.GetSelectedSlot();
+                        if (sel != CENTER_SLOT_INDEX && sel >= sc)
+                            m_userArea.SetSelectedSlot(sc - 1);
+                        m_userArea.Redraw();
+                        UpdateInspector();
+                        RefreshSubmenuList();
+                    }
                 }
             }
             break;
@@ -1578,7 +1618,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             if (prof)
             {
                 Int32 sel = m_userArea.GetSelectedSlot();
-                if (sel >= 0 && sel <= 8 && prof->slots[sel].IsSubMenu())
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX) && prof->slots[sel].IsSubMenu())
                 {
                     for (Int32 i = 0; i < mgr.GetProfileCount(); ++i)
                     {
@@ -1611,7 +1651,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             if (prof)
             {
                 Int32 sel = m_userArea.GetSelectedSlot();
-                if (sel >= 0 && sel <= 8)
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
                     Vector col;
                     Float br = 1.0;
@@ -1631,7 +1671,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             if (prof)
             {
                 Int32 sel = m_userArea.GetSelectedSlot();
-                if (sel >= 0 && sel <= 8)
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
                     prof->slots[sel].commandId = NOTOK;
                     prof->slots[sel].subMenuName = ""_s;
@@ -1892,6 +1932,30 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                     {
                         prof->name = newName;
                         RefreshProfileComboList();
+                    }
+                }
+            }
+            else if (msg.GetInt32(BFM_ACTION_ID) == IDC_SLOTCOUNT_SLIDER)
+            {
+                PieProfileManager& mgr = PieProfileManager::Get();
+                PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                if (prof)
+                {
+                    Int32 sc = 8;
+                    if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
+                    {
+                        if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
+                        if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+                        if (prof->slotCount != sc)
+                        {
+                            prof->slotCount = sc;
+                            Int32 sel = m_userArea.GetSelectedSlot();
+                            if (sel != CENTER_SLOT_INDEX && sel >= sc)
+                                m_userArea.SetSelectedSlot(sc - 1);
+                            m_userArea.Redraw();
+                            UpdateInspector();
+                            RefreshSubmenuList();
+                        }
                     }
                 }
             }

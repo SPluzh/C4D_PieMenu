@@ -50,7 +50,7 @@
   - Drag commands or submenus directly onto radial slots or the slot inspector.
   - **Drag & Drop Slot Reordering**: Freely click and drag slots directly on the pie canvas to swap or move them to different positions. Hold `Ctrl` while dragging to duplicate a slot.
   - Double-clicking a command or submenu assigns it to the active slot.
-- **Interactive Radial Canvas**: Real-time visual canvas displaying 4-way or 8-way slot layouts, icons, labels, accent colors, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
+- **Interactive Radial Canvas**: Real-time visual canvas displaying dynamic 2 to 24 slot layouts, icons, labels, accent colors, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
 - **Detailed Slot Inspector**:
   - **Submenu Link Dropdown**: Select any existing menu to link as a submenu, with an **`Edit Menu ->`** button to jump straight to editing that submenu.
   - Custom Command ID or name.
@@ -62,7 +62,7 @@
   - **Per-Menu Display Style**: Choose between *Icon and Label*, *Icon Only* (minimalist HUD with glowing icons), or *Label Only* (classic text menu) individually for each pie menu profile.
   - **Per-Menu Icon Size**: Customize icon size in pixels (12px to 64px) individually per menu.
   - Adjustable Outer Radius and Deadzone Radius.
-  - 4 or 8 radial slots.
+  - **Dynamic Slot Count**: Adjust radial slice count from 2 up to 24 items using an interactive numeric slider with real-time preview.
   - Toggle *Show Menu Title* badge.
 - **Import & Export Settings**:
   - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files (includes full submenu hierarchies).

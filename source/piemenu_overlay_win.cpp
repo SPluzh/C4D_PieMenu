@@ -563,7 +563,7 @@ void PieMenuOverlay::CommitAndClose()
     if (!m_active)
         return;
 
-    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
         if (slot.enabled && slot.IsSubMenu())
@@ -576,7 +576,7 @@ void PieMenuOverlay::CommitAndClose()
                 return;
             }
         }
-        else if (m_hoveredSlot == 8 && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
         {
             NavigateBack();
             return;
@@ -608,7 +608,7 @@ void PieMenuOverlay::CommitAndClose()
     Int32 commandToCall = NOTOK;
     String slotTitle = "None"_s;
 
-    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
         if (slot.enabled && slot.commandId > 0 && !slot.IsSubMenu())
@@ -918,13 +918,13 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
 
     if (dist < deadzone)
     {
-        if (m_activeProfile->slots[8].enabled && (m_activeProfile->slots[8].commandId > 0 || m_activeProfile->slots[8].IsSubMenu()))
+        if (m_activeProfile->slots[CENTER_SLOT_INDEX].enabled && (m_activeProfile->slots[CENTER_SLOT_INDEX].commandId > 0 || m_activeProfile->slots[CENTER_SLOT_INDEX].IsSubMenu()))
         {
-            m_hoveredSlot = 8;
+            m_hoveredSlot = CENTER_SLOT_INDEX;
         }
         else if (!m_profileStack.IsEmpty())
         {
-            m_hoveredSlot = 8;
+            m_hoveredSlot = CENTER_SLOT_INDEX;
         }
         else
         {
@@ -937,8 +937,8 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         Float deg = angleRad * (180.0 / PI);
         Int32 s = m_activeProfile->AngleToSlot(deg, dist, deadzone);
         Int32 count = m_activeProfile->slotCount;
-        if (count != 4 && count != 8)
-            count = 8;
+        if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+        if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
         if (s >= 0 && s < count && !m_activeProfile->slots[s].enabled)
         {
             s = NOTOK;
@@ -952,10 +952,10 @@ void PieMenuOverlay::UpdateHover(Float dx, Float dy)
         m_hoverStartTick = (UInt32)GetTickCount();
     }
 
-    if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
-        if (m_hoveredSlot == 8 && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
         {
             StatusSetText("Pie Menu: [Back to parent menu] (Click or release to go back)"_s);
         }
@@ -1047,7 +1047,7 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
                 }
 
                 // Check auto-expand submenu on hover
-                if (m_activeProfile && m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+                if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
                 {
                     const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
                     if (slot.enabled && slot.IsSubMenu() && m_hoverStartTick > 0)
@@ -1140,11 +1140,11 @@ void PieMenuOverlay::RenderOverlay()
         const float hoverOuterR = 125.0f * radiusScale;
 
         Int32 count = m_activeProfile->slotCount;
-        if (count != 4 && count != 8)
-            count = 8;
+        if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+        if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
 
         const float sliceDeg = 360.0f / (float)count;
-        const float gapDeg = (count == 4) ? 2.2f : 1.8f;
+        const float gapDeg = (count <= 4) ? 2.2f : ((count <= 8) ? 1.8f : ((count <= 14) ? 1.2f : 0.8f));
         const float deg2rad = (float)(PI / 180.0);
 
         // 0. Soft radial ambient backdrop shadow behind visible slots and center hub
@@ -1420,11 +1420,11 @@ void PieMenuOverlay::RenderOverlay()
             }
         }
 
-        // 3. Center Hub (Slot 8 / deadzone)
-        const PieSlot& slot8 = m_activeProfile->slots[8];
+        // 3. Center Hub (CENTER_SLOT_INDEX / deadzone)
+        const PieSlot& slot8 = m_activeProfile->slots[CENTER_SLOT_INDEX];
         Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
         Bool isSubMenuMode = !m_profileStack.IsEmpty();
-        Bool centerHovered = (m_hoveredSlot == 8);
+        Bool centerHovered = (m_hoveredSlot == CENTER_SLOT_INDEX);
 
         Gdiplus::GraphicsPath hubPath;
         hubPath.AddEllipse(cx - deadzoneRadius, cy - deadzoneRadius, deadzoneRadius * 2.0f, deadzoneRadius * 2.0f);

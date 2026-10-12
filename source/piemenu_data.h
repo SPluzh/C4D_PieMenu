@@ -66,13 +66,18 @@ struct PieHotkey
     Bool IsMatch(Bool ctrlDown, Bool shiftDown, Bool altDown, Int32 key) const;
 };
 
+static constexpr Int32 MIN_SLOT_COUNT = 2;
+static constexpr Int32 MAX_SLOT_COUNT = 24;
+static constexpr Int32 CENTER_SLOT_INDEX = 24;
+static constexpr Int32 TOTAL_SLOT_COUNT = 25;
+
 struct PieProfile
 {
     maxon::String  name;
     PieContextMode context = PieContextMode::Global;
-    Int32          slotCount = 8; // 4 or 8
+    Int32          slotCount = 8; // 2..24 radial slots
     Bool           showTitle = true;
-    PieSlot        slots[9];      // 0..7 radial, 8 is Center
+    PieSlot        slots[TOTAL_SLOT_COUNT]; // 0..23 radial, 24 is Center Hub (CENTER_SLOT_INDEX)
     PieHotkey      hotkey;
     Float          radius = 85.0;
     Float          deadzone = 26.0;
@@ -81,6 +86,10 @@ struct PieProfile
 
     Float GetSlotAngle(Int32 index) const;
     Int32 AngleToSlot(Float deg, Float dist, Float deadzone) const;
+
+    Bool IsRadialSlot(Int32 index) const { return index >= 0 && index < slotCount; }
+    Bool IsCenterSlot(Int32 index) const { return index == CENTER_SLOT_INDEX; }
+    Bool IsValidSlot(Int32 index) const { return IsRadialSlot(index) || IsCenterSlot(index); }
 };
 
 class PieProfileManager

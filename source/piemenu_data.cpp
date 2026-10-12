@@ -13,6 +13,7 @@ static const Int32 PIE_CONFIG_MAGIC_V3 = 0x50494533; // "PIE3"
 static const Int32 PIE_CONFIG_MAGIC_V4 = 0x50494534; // "PIE4"
 static const Int32 PIE_CONFIG_MAGIC_V5 = 0x50494535; // "PIE5"
 static const Int32 PIE_CONFIG_MAGIC_V6 = 0x50494536; // "PIE6"
+static const Int32 PIE_CONFIG_MAGIC_V7 = 0x50494537; // "PIE7"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -238,33 +239,18 @@ Bool PieSlot::GetIconBitmap(IconData& outIcon) const
 
 Float PieProfile::GetSlotAngle(Int32 index) const
 {
-    if (slotCount == 4)
-    {
-        switch (index)
-        {
-            case 0: return -PI * 0.5; // Up
-            case 1: return 0.0;       // Right
-            case 2: return PI * 0.5;  // Down
-            case 3: return PI;        // Left
-            default: return 0.0;
-        }
-    }
-    else
-    {
-        // 8-way: 0=Up, 1=UpRight, 2=Right, 3=DownRight, 4=Down, 5=DownLeft, 6=Left, 7=UpLeft
-        switch (index)
-        {
-            case 0: return -PI * 0.5;           // Up (-90)
-            case 1: return -PI * 0.25;          // Up-Right (-45)
-            case 2: return 0.0;                 // Right (0)
-            case 3: return PI * 0.25;           // Down-Right (+45)
-            case 4: return PI * 0.5;            // Down (+90)
-            case 5: return PI * 0.75;           // Down-Left (+135)
-            case 6: return PI;                  // Left (180)
-            case 7: return -PI * 0.75;          // Up-Left (-135)
-            default: return 0.0;
-        }
-    }
+    Int32 count = slotCount;
+    if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+    if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
+
+    Float step = (2.0 * PI) / (Float)count;
+    // Slot 0 is centered at Up (-PI * 0.5)
+    Float angle = -PI * 0.5 + (Float)index * step;
+    while (angle > PI)
+        angle -= 2.0 * PI;
+    while (angle <= -PI)
+        angle += 2.0 * PI;
+    return angle;
 }
 
 Int32 PieProfile::AngleToSlot(Float deg, Float dist, Float deadzone) const
@@ -272,24 +258,25 @@ Int32 PieProfile::AngleToSlot(Float deg, Float dist, Float deadzone) const
     if (dist < deadzone)
         return NOTOK;
 
-    if (slotCount == 4)
-    {
-        if (deg >= -135.0 && deg < -45.0) return 0; // Up
-        if (deg >= -45.0 && deg < 45.0)   return 1; // Right
-        if (deg >= 45.0 && deg < 135.0)   return 2; // Down
-        return 3;                                   // Left
-    }
-    else
-    {
-        if (deg >= -112.5 && deg < -67.5) return 0; // Up
-        if (deg >= -67.5  && deg < -22.5) return 1; // Up-Right
-        if (deg >= -22.5  && deg < 22.5)  return 2; // Right
-        if (deg >= 22.5   && deg < 67.5)  return 3; // Down-Right
-        if (deg >= 67.5   && deg < 112.5) return 4; // Down
-        if (deg >= 112.5  && deg < 157.5) return 5; // Down-Left
-        if (deg >= 157.5  || deg < -157.5) return 6; // Left
-        return 7;                                   // Up-Left
-    }
+    Int32 count = slotCount;
+    if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+    if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
+
+    Float sliceDeg = 360.0 / (Float)count;
+    Float halfSlice = sliceDeg * 0.5;
+
+    // Slot 0 is centered at -90 degrees (Up / 12 o'clock).
+    // The wedge for slot 0 spans [-90 - halfSlice, -90 + halfSlice).
+    Float relDeg = deg - (-90.0 - halfSlice);
+    while (relDeg < 0.0)
+        relDeg += 360.0;
+    while (relDeg >= 360.0)
+        relDeg -= 360.0;
+
+    Int32 slot = (Int32)(relDeg / sliceDeg);
+    if (slot < 0) slot = 0;
+    if (slot >= count) slot = count - 1;
+    return slot;
 }
 
 PieProfileManager& PieProfileManager::Get()
@@ -363,9 +350,9 @@ void PieProfileManager::InitDefaults()
         p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
 
         // Center -> Optimize
-        p.slots[8].commandId = 1011167;
-        p.slots[8].customLabel = "Optimize"_s;
-        p.slots[8].accentColor = Vector(0.6, 0.6, 0.6);
+        p.slots[CENTER_SLOT_INDEX].commandId = 1011167;
+        p.slots[CENTER_SLOT_INDEX].customLabel = "Optimize"_s;
+        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
 
         m_profiles.Append(p) iferr_ignore("Append");
     }
@@ -425,9 +412,9 @@ void PieProfileManager::InitDefaults()
         p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
 
         // Center -> Extrude
-        p.slots[8].commandId = 1011152;
-        p.slots[8].customLabel = "Extrude"_s;
-        p.slots[8].accentColor = Vector(0.6, 0.6, 0.6);
+        p.slots[CENTER_SLOT_INDEX].commandId = 1011152;
+        p.slots[CENTER_SLOT_INDEX].customLabel = "Extrude"_s;
+        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
 
         m_profiles.Append(p) iferr_ignore("Append");
     }
@@ -487,9 +474,9 @@ void PieProfileManager::InitDefaults()
         p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
 
         // Center -> Dissolve
-        p.slots[8].commandId = 1011162;
-        p.slots[8].customLabel = "Dissolve"_s;
-        p.slots[8].accentColor = Vector(0.6, 0.6, 0.6);
+        p.slots[CENTER_SLOT_INDEX].commandId = 1011162;
+        p.slots[CENTER_SLOT_INDEX].customLabel = "Dissolve"_s;
+        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
 
         m_profiles.Append(p) iferr_ignore("Append");
     }
@@ -549,9 +536,9 @@ void PieProfileManager::InitDefaults()
         p.slots[7].accentColor = Vector(0.7, 0.4, 0.8);
 
         // Center -> Current State to Object
-        p.slots[8].commandId = 12233;
-        p.slots[8].customLabel = "Current State"_s;
-        p.slots[8].accentColor = Vector(0.6, 0.6, 0.6);
+        p.slots[CENTER_SLOT_INDEX].commandId = 12233;
+        p.slots[CENTER_SLOT_INDEX].customLabel = "Current State"_s;
+        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
 
         m_profiles.Append(p) iferr_ignore("Append");
     }
@@ -591,9 +578,9 @@ void PieProfileManager::InitDefaults()
         p.slots[3].accentColor = Vector(1.0, 0.3, 0.3);
 
         // Center -> Undo
-        p.slots[8].commandId = 12105;
-        p.slots[8].customLabel = "Undo"_s;
-        p.slots[8].accentColor = Vector(0.6, 0.6, 0.6);
+        p.slots[CENTER_SLOT_INDEX].commandId = 12105;
+        p.slots[CENTER_SLOT_INDEX].customLabel = "Undo"_s;
+        p.slots[CENTER_SLOT_INDEX].accentColor = Vector(0.6, 0.6, 0.6);
 
         m_profiles.Append(p) iferr_ignore("Append");
     }
@@ -628,34 +615,43 @@ static maxon::String StdStringToC4DString(const std::string& str)
     return maxon::String(str.c_str());
 }
 
-static const Char* GetSlotPositionName(Int32 slotCount, Int32 index)
+static maxon::String GetSlotPositionName(Int32 slotCount, Int32 index)
 {
-    if (index == 8) return "Center";
+    if (index == CENTER_SLOT_INDEX) return "Center"_s;
     if (slotCount == 4)
     {
         switch (index)
         {
-            case 0: return "North";
-            case 1: return "East";
-            case 2: return "South";
-            case 3: return "West";
-            default: return "Unused";
+            case 0: return "North"_s;
+            case 1: return "East"_s;
+            case 2: return "South"_s;
+            case 3: return "West"_s;
+            default: return "Unused"_s;
+        }
+    }
+    else if (slotCount == 8)
+    {
+        switch (index)
+        {
+            case 0: return "North"_s;
+            case 1: return "NorthEast"_s;
+            case 2: return "East"_s;
+            case 3: return "SouthEast"_s;
+            case 4: return "South"_s;
+            case 5: return "SouthWest"_s;
+            case 6: return "West"_s;
+            case 7: return "NorthWest"_s;
+            default: return "Unused"_s;
         }
     }
     else
     {
-        switch (index)
+        if (index >= 0 && index < slotCount)
         {
-            case 0: return "North";
-            case 1: return "NorthEast";
-            case 2: return "East";
-            case 3: return "SouthEast";
-            case 4: return "South";
-            case 5: return "SouthWest";
-            case 6: return "West";
-            case 7: return "NorthWest";
-            default: return "Unused";
+            Int32 deg = (Int32)(index * 360.0 / slotCount);
+            return FormatString("Slot @ (@deg)"_s, index + 1, deg);
         }
+        return "Unused"_s;
     }
 }
 
@@ -683,12 +679,40 @@ static JsonValue ProfileToJson(const PieProfile& prof)
 
     // Slots
     JsonValue jSlots = JsonValue::Array();
-    for (Int32 s = 0; s < 9; ++s)
+    for (Int32 s = 0; s < prof.slotCount; ++s)
     {
         const PieSlot& slot = prof.slots[s];
         JsonValue jSlot = JsonValue::Object();
         jSlot.Set("index", (int64_t)s);
-        jSlot.Set("position", GetSlotPositionName(prof.slotCount, s));
+        jSlot.Set("position", C4DStringToStdString(GetSlotPositionName(prof.slotCount, s)));
+        jSlot.Set("commandId", (int64_t)slot.commandId);
+        if (slot.subMenuName.IsPopulated())
+            jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
+        if (slot.commandId > 0)
+        {
+            String cname = GetCommandName(slot.commandId);
+            if (cname.IsPopulated())
+                jSlot.Set("commandName", C4DStringToStdString(cname));
+        }
+        if (slot.customLabel.IsPopulated())
+            jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
+
+        JsonValue jCol = JsonValue::Array();
+        jCol.Push(slot.accentColor.x);
+        jCol.Push(slot.accentColor.y);
+        jCol.Push(slot.accentColor.z);
+        jSlot.Set("accentColor", jCol);
+
+        jSlot.Set("enabled", (bool)slot.enabled);
+        jSlots.Push(jSlot);
+    }
+
+    // Center Hub
+    {
+        const PieSlot& slot = prof.slots[CENTER_SLOT_INDEX];
+        JsonValue jSlot = JsonValue::Object();
+        jSlot.Set("index", (int64_t)CENTER_SLOT_INDEX);
+        jSlot.Set("position", "Center");
         jSlot.Set("commandId", (int64_t)slot.commandId);
         if (slot.subMenuName.IsPopulated())
             jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
@@ -735,7 +759,9 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
         outProf.context = PieContextMode::Global;
 
     int sc = (int)jProf.GetInt("slotCount", 8);
-    outProf.slotCount = (sc == 4) ? 4 : 8;
+    if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
+    if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+    outProf.slotCount = sc;
     outProf.showTitle = jProf.GetBool("showTitle", true);
     outProf.radius = (Float)jProf.GetNumber("radius", 85.0);
     outProf.deadzone = (Float)jProf.GetNumber("deadzone", 26.0);
@@ -760,7 +786,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
         outProf.hotkey.vkCode = 0;
     }
 
-    for (int s = 0; s < 9; ++s)
+    for (int s = 0; s < TOTAL_SLOT_COUNT; ++s)
     {
         outProf.slots[s].commandId = NOTOK;
         outProf.slots[s].subMenuName = ""_s;
@@ -777,7 +803,14 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
             const JsonValue& jSlot = (*arrSlots)[i];
             if (!jSlot.IsObject()) continue;
             int idx = (int)jSlot.GetInt("index", (int64_t)i);
-            if (idx >= 0 && idx < 9)
+            std::string pos = jSlot.GetString("position", "");
+
+            if (pos == "Center" || idx == CENTER_SLOT_INDEX || (idx == 8 && (arrSlots->size() == 9 || sc <= 8) && (idx >= sc || pos.find("Center") != std::string::npos)))
+            {
+                idx = CENTER_SLOT_INDEX;
+            }
+
+            if (idx >= 0 && idx < TOTAL_SLOT_COUNT)
             {
                 outProf.slots[idx].commandId = (Int32)jSlot.GetInt("commandId", NOTOK);
                 std::string sub = jSlot.GetString("subMenuName", "");
@@ -814,7 +847,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V6)
+    if (firstVal == PIE_CONFIG_MAGIC_V7)
+    {
+        version = 7;
+        if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V6)
     {
         version = 6;
         if (!file->ReadInt32(&profileCount) || profileCount <= 0 || profileCount > 1000)
@@ -863,20 +902,54 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
         file->ReadInt32(&ctx);
         prof.context = (PieContextMode)ctx;
         file->ReadInt32(&prof.slotCount);
+        if (prof.slotCount < MIN_SLOT_COUNT) prof.slotCount = MIN_SLOT_COUNT;
+        if (prof.slotCount > MAX_SLOT_COUNT) prof.slotCount = MAX_SLOT_COUNT;
 
-        for (Int32 s = 0; s < 9; ++s)
+        for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
         {
-            file->ReadInt32(&prof.slots[s].commandId);
-            file->ReadString(&prof.slots[s].customLabel);
-            file->ReadVector64(&prof.slots[s].accentColor);
-            file->ReadBool(&prof.slots[s].enabled);
-            if (version >= 4)
+            prof.slots[s].commandId = NOTOK;
+            prof.slots[s].subMenuName = ""_s;
+            prof.slots[s].customLabel = ""_s;
+            prof.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
+            prof.slots[s].enabled = true;
+        }
+
+        if (version >= 7)
+        {
+            for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
             {
+                file->ReadInt32(&prof.slots[s].commandId);
+                file->ReadString(&prof.slots[s].customLabel);
+                file->ReadVector64(&prof.slots[s].accentColor);
+                file->ReadBool(&prof.slots[s].enabled);
                 file->ReadString(&prof.slots[s].subMenuName);
             }
-            else
+        }
+        else
+        {
+            for (Int32 s = 0; s < 9; ++s)
             {
-                prof.slots[s].subMenuName = ""_s;
+                Int32 cmdId = NOTOK;
+                String cLabel;
+                Vector aCol;
+                Bool en = true;
+                String subName;
+
+                file->ReadInt32(&cmdId);
+                file->ReadString(&cLabel);
+                file->ReadVector64(&aCol);
+                file->ReadBool(&en);
+                if (version >= 4)
+                {
+                    file->ReadString(&subName);
+                }
+
+                Int32 targetSlot = (s == 8) ? CENTER_SLOT_INDEX : s;
+                prof.slots[targetSlot].commandId = cmdId;
+                prof.slots[targetSlot].customLabel = cLabel;
+                prof.slots[targetSlot].accentColor = aCol;
+                prof.slots[targetSlot].enabled = en;
+                prof.slots[targetSlot].subMenuName = subName;
             }
         }
 
@@ -1060,7 +1133,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1153,7 +1226,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Bool dummyCtrlShift = false;
@@ -1284,8 +1357,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V6 header to denote per-profile sizing and display format
-    file->WriteInt32(PIE_CONFIG_MAGIC_V6);
+    // Write magic V7 header to denote per-profile sizing, display format and up to 24 slots
+    file->WriteInt32(PIE_CONFIG_MAGIC_V7);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1297,7 +1370,7 @@ Bool PieProfileManager::SaveToFile()
         file->WriteInt32((Int32)prof.context);
         file->WriteInt32(prof.slotCount);
 
-        for (Int32 s = 0; s < 9; ++s)
+        for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
         {
             file->WriteInt32(prof.slots[s].commandId);
             file->WriteString(prof.slots[s].customLabel);
@@ -1402,14 +1475,16 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
     PieProfile p;
     p.name = name.IsPopulated() ? name : FormatString("Menu @"_s, (Int32)m_profiles.GetCount() + 1);
     p.context = context;
-    p.slotCount = (slotCount == 4) ? 4 : 8;
+    if (slotCount < MIN_SLOT_COUNT) slotCount = MIN_SLOT_COUNT;
+    if (slotCount > MAX_SLOT_COUNT) slotCount = MAX_SLOT_COUNT;
+    p.slotCount = slotCount;
     p.hotkey.enabled = false;
     p.hotkey.ctrl = false;
     p.hotkey.shift = false;
     p.hotkey.alt = false;
     p.hotkey.vkCode = 0;
 
-    for (Int32 s = 0; s < 9; ++s)
+    for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
     {
         p.slots[s].commandId = NOTOK;
         p.slots[s].subMenuName = ""_s;
@@ -1452,7 +1527,7 @@ Bool PieProfileManager::DeleteProfile(Int32 index)
     // Clear subMenuName in any slot referencing the deleted profile
     for (Int32 p = 0; p < (Int32)m_profiles.GetCount(); ++p)
     {
-        for (Int32 s = 0; s < 9; ++s)
+        for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
         {
             if (m_profiles[p].slots[s].subMenuName == delName)
             {
@@ -1475,7 +1550,7 @@ Bool PieProfileManager::RenameProfile(Int32 index, const maxon::String& newName)
     // Update references across all profiles' slots
     for (Int32 p = 0; p < (Int32)m_profiles.GetCount(); ++p)
     {
-        for (Int32 s = 0; s < 9; ++s)
+        for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
         {
             if (m_profiles[p].slots[s].subMenuName == oldName)
             {

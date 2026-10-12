@@ -113,7 +113,7 @@ Int32 PieMenuEditorArea::GetSlotUnderCoord(Int32 x, Int32 y) const
     Float maxOuterR = (125.0 * radiusScale + 15.0) * invDpi;
 
     if (dist < deadzoneRadius)
-        return 8; // Center Slot
+        return CENTER_SLOT_INDEX; // Center Slot
 
     if (dist > maxOuterR)
         return NOTOK;
@@ -305,14 +305,14 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     const Float hoverOuterR = (125.0 * radiusScale) * invDpi; // Pops out by 13px on selection / drag-hover
 
     Int32 count = prof->slotCount;
-    if (count != 4 && count != 8)
-        count = 8;
+    if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+    if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
 
     const Float deg2rad = PI / 180.0;
     const Float sliceDeg = 360.0 / Float(count);
-    const Float gapDeg = (count == 4) ? 2.5 : 2.0;
+    const Float gapDeg = (count <= 4) ? 2.5 : ((count <= 8) ? 2.0 : ((count <= 14) ? 1.4 : 0.9));
     const Float gapRad = (gapDeg * deg2rad) * 0.5;
-    const Int32 steps = (count == 4) ? 18 : 14;
+    const Int32 steps = (count <= 4) ? 18 : ((count <= 8) ? 14 : ((count <= 14) ? 10 : 7));
 
     // 1. Draw circular segments (Fills and active indicators)
     for (Int32 i = 0; i < count; ++i)
@@ -541,11 +541,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawLine((Int32)sx, (Int32)sy, (Int32)ex, (Int32)ey, 1.5);
     }
 
-    // 5. Center Hub (Slot 8)
-    const PieSlot& slot8 = prof->slots[8];
-    Bool isSelected8 = (m_selectedSlot == 8);
-    Bool isDragHover8 = (m_dragHoverSlot == 8);
-    Bool isDragSource8 = (m_dragSourceSlot == 8);
+    // 5. Center Hub (CENTER_SLOT_INDEX)
+    const PieSlot& slot8 = prof->slots[CENTER_SLOT_INDEX];
+    Bool isSelected8 = (m_selectedSlot == CENTER_SLOT_INDEX);
+    Bool isDragHover8 = (m_dragHoverSlot == CENTER_SLOT_INDEX);
+    Bool isDragSource8 = (m_dragSourceSlot == CENTER_SLOT_INDEX);
 
     Vector hubBgCol;
     Vector hubBorderCol;
@@ -640,7 +640,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     // 6. Dynamic visual swap/move connection link between source and target slots
     auto getSlotCenter = [&](Int32 s) -> Vector2d
     {
-        if (s == 8)
+        if (s == CENTER_SLOT_INDEX)
             return Vector2d(cx, cy);
         if (s >= 0 && s < count)
         {
@@ -802,15 +802,15 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
                     if (srcSlot == NOTOK)
                     {
                         uintptr_t val = reinterpret_cast<uintptr_t>(object);
-                        if (val <= 8)
+                        if (val < TOTAL_SLOT_COUNT)
                             srcSlot = (Int32)val;
                     }
 
                     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
                     if (prof && srcSlot != NOTOK && hoverSlot != NOTOK && srcSlot != hoverSlot)
                     {
-                        Bool validSrc = (srcSlot >= 0 && (srcSlot < prof->slotCount || srcSlot == 8));
-                        Bool validDst = (hoverSlot >= 0 && (hoverSlot < prof->slotCount || hoverSlot == 8));
+                        Bool validSrc = (srcSlot >= 0 && (srcSlot < prof->slotCount || srcSlot == CENTER_SLOT_INDEX));
+                        Bool validDst = (hoverSlot >= 0 && (hoverSlot < prof->slotCount || hoverSlot == CENTER_SLOT_INDEX));
 
                         if (validSrc && validDst)
                         {
@@ -856,21 +856,18 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
                 if (msg.GetInt32(BFM_DRAG_FINISHED))
                 {
                     Int32 cmdId = ExtractCommandId(type, object, msg);
-                    if (cmdId > 0 && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && m_dragHoverSlot < 9)
+                    PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
+                    if (prof && cmdId > 0 && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && (m_dragHoverSlot < prof->slotCount || m_dragHoverSlot == CENTER_SLOT_INDEX))
                     {
-                        PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
-                        if (prof)
-                        {
-                            prof->slots[m_dragHoverSlot].commandId = cmdId;
-                            prof->slots[m_dragHoverSlot].subMenuName = ""_s;
-                            prof->slots[m_dragHoverSlot].customLabel = GetCommandName(cmdId);
-                            prof->slots[m_dragHoverSlot].enabled = true;
-                            m_selectedSlot = m_dragHoverSlot;
+                        prof->slots[m_dragHoverSlot].commandId = cmdId;
+                        prof->slots[m_dragHoverSlot].subMenuName = ""_s;
+                        prof->slots[m_dragHoverSlot].customLabel = GetCommandName(cmdId);
+                        prof->slots[m_dragHoverSlot].enabled = true;
+                        m_selectedSlot = m_dragHoverSlot;
 
-                            BaseContainer action(BFM_ACTION);
-                            action.SetInt32(BFM_ACTION_ID, GetId());
-                            SendParentMessage(action);
-                        }
+                        BaseContainer action(BFM_ACTION);
+                        action.SetInt32(BFM_ACTION_ID, GetId());
+                        SendParentMessage(action);
                     }
                     m_dragHoverSlot = NOTOK;
                     Redraw();
@@ -891,21 +888,18 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
                     maxon::String subName = ExtractSubmenuName(type, object, msg);
                     PieProfileManager& mgr = PieProfileManager::Get();
                     PieProfile* subProf = mgr.FindProfileByName(subName);
-                    if (subProf && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && m_dragHoverSlot < 9)
+                    PieProfile* prof = mgr.GetProfile(m_profileIndex);
+                    if (subProf && prof && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && (m_dragHoverSlot < prof->slotCount || m_dragHoverSlot == CENTER_SLOT_INDEX))
                     {
-                        PieProfile* prof = mgr.GetProfile(m_profileIndex);
-                        if (prof)
-                        {
-                            prof->slots[m_dragHoverSlot].subMenuName = subProf->name;
-                            prof->slots[m_dragHoverSlot].commandId = NOTOK;
-                            prof->slots[m_dragHoverSlot].customLabel = subProf->name;
-                            prof->slots[m_dragHoverSlot].enabled = true;
-                            m_selectedSlot = m_dragHoverSlot;
+                        prof->slots[m_dragHoverSlot].subMenuName = subProf->name;
+                        prof->slots[m_dragHoverSlot].commandId = NOTOK;
+                        prof->slots[m_dragHoverSlot].customLabel = subProf->name;
+                        prof->slots[m_dragHoverSlot].enabled = true;
+                        m_selectedSlot = m_dragHoverSlot;
 
-                            BaseContainer action(BFM_ACTION);
-                            action.SetInt32(BFM_ACTION_ID, GetId());
-                            SendParentMessage(action);
-                        }
+                        BaseContainer action(BFM_ACTION);
+                        action.SetInt32(BFM_ACTION_ID, GetId());
+                        SendParentMessage(action);
                     }
                     m_dragHoverSlot = NOTOK;
                     Redraw();

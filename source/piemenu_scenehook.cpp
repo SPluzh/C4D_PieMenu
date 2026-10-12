@@ -73,9 +73,9 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
 
     if (dist < deadzone)
     {
-        if (m_activeProfile->slots[8].enabled && (m_activeProfile->slots[8].commandId > 0 || m_activeProfile->slots[8].IsSubMenu()))
+        if (m_activeProfile->slots[CENTER_SLOT_INDEX].enabled && (m_activeProfile->slots[CENTER_SLOT_INDEX].commandId > 0 || m_activeProfile->slots[CENTER_SLOT_INDEX].IsSubMenu()))
         {
-            m_hoveredSlot = 8;
+            m_hoveredSlot = CENTER_SLOT_INDEX;
         }
         else
         {
@@ -88,8 +88,8 @@ void PieMenuSceneHook::UpdateHover(Float curX, Float curY)
     Float deg = angleRad * (180.0 / PI);
     Int32 s = m_activeProfile->AngleToSlot(deg, dist, deadzone);
     Int32 count = m_activeProfile->slotCount;
-    if (count != 4 && count != 8)
-        count = 8;
+    if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+    if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
     if (s >= 0 && s < count && !m_activeProfile->slots[s].enabled)
     {
         s = NOTOK;
@@ -102,7 +102,7 @@ void PieMenuSceneHook::CommitSelection()
     if (!m_activeProfile || m_hoveredSlot == NOTOK)
         return;
 
-    if (m_hoveredSlot >= 0 && m_hoveredSlot < 9)
+    if (m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
         const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
         if (slot.enabled)
@@ -233,14 +233,14 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     const Float hoverOuterR = 125.0 * radiusScale; // Pops out by 13px on hover
 
     Int32 count = m_activeProfile->slotCount;
-    if (count != 4 && count != 8)
-        count = 8;
+    if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
+    if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
 
     const Float deg2rad = PI / 180.0;
     const Float sliceDeg = 360.0 / Float(count);
-    const Float gapDeg = (count == 4) ? 2.2 : 1.8;
+    const Float gapDeg = (count <= 4) ? 2.2 : ((count <= 8) ? 1.8 : ((count <= 14) ? 1.2 : 0.8));
     const Float gapRad = (gapDeg * deg2rad) * 0.5;
-    const Int32 steps = (count == 4) ? 18 : 14;
+    const Int32 steps = (count <= 4) ? 18 : ((count <= 8) ? 14 : ((count <= 14) ? 10 : 7));
 
     // 1. Draw circular segments (Fills and active indicators)
     for (Int32 i = 0; i < count; ++i)
@@ -372,10 +372,10 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         bd->DrawHUDText(textX, textY, labelText);
     }
 
-    // 4. Center hub (Slot 8 in Pie Menu / deadzone)
-    const PieSlot& slot8 = m_activeProfile->slots[8];
+    // 4. Center hub (CENTER_SLOT_INDEX in Pie Menu / deadzone)
+    const PieSlot& slot8 = m_activeProfile->slots[CENTER_SLOT_INDEX];
     Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
-    Bool centerHovered = (m_hoveredSlot == 8);
+    Bool centerHovered = (m_hoveredSlot == CENTER_SLOT_INDEX);
 
     Vector hubBgCol;
     if (centerHovered)
