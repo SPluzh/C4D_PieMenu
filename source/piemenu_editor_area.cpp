@@ -259,18 +259,18 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     Float cy = Float(h) * 0.5;
 
     // Lambda: draw filled annular ring sector (donut slice) using polygon fill
-    auto drawAnnularSectorPoly = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& fillColor, Int32 steps = 14)
+    auto drawAnnularSectorPoly = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStartIn, Float aEndIn, Float aStartOut, Float aEndOut, const Vector& fillColor, Int32 steps = 14)
     {
         Vector2d pts[64];
         Int32 idx = 0;
         for (Int32 s = 0; s <= steps && idx < 32; ++s)
         {
-            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a = aStartOut + (Float(s) / Float(steps)) * (aEndOut - aStartOut);
             pts[idx++] = Vector2d(cenX + std::cos(a) * rOut, cenY + std::sin(a) * rOut);
         }
         for (Int32 s = steps; s >= 0 && idx < 64; --s)
         {
-            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a = aStartIn + (Float(s) / Float(steps)) * (aEndIn - aStartIn);
             pts[idx++] = Vector2d(cenX + std::cos(a) * rIn, cenY + std::sin(a) * rIn);
         }
         DrawSetPen(fillColor);
@@ -278,18 +278,18 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     };
 
     // Lambda: draw contour lines of an annular sector
-    auto drawAnnularSectorBorder = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStart, Float aEnd, const Vector& borderColor, Float lineWidth, Int32 steps = 14)
+    auto drawAnnularSectorBorder = [&](Float cenX, Float cenY, Float rIn, Float rOut, Float aStartIn, Float aEndIn, Float aStartOut, Float aEndOut, const Vector& borderColor, Float lineWidth, Int32 steps = 14)
     {
         Vector2d pts[64];
         Int32 idx = 0;
         for (Int32 s = 0; s <= steps && idx < 32; ++s)
         {
-            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a = aStartOut + (Float(s) / Float(steps)) * (aEndOut - aStartOut);
             pts[idx++] = Vector2d(cenX + std::cos(a) * rOut, cenY + std::sin(a) * rOut);
         }
         for (Int32 s = steps; s >= 0 && idx < 64; --s)
         {
-            Float a = aStart + (Float(s) / Float(steps)) * (aEnd - aStart);
+            Float a = aStartIn + (Float(s) / Float(steps)) * (aEndIn - aStartIn);
             pts[idx++] = Vector2d(cenX + std::cos(a) * rIn, cenY + std::sin(a) * rIn);
         }
         DrawSetPen(borderColor);
@@ -317,9 +317,25 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
     const Float deg2rad = PI / 180.0;
     const Float sliceDeg = 360.0 / Float(count);
-    const Float gapDeg = (count <= 4) ? 2.5 : ((count <= 8) ? 2.0 : ((count <= 14) ? 1.4 : 0.9));
-    const Float gapRad = (gapDeg * deg2rad) * 0.5;
+    const Float sliceRad = sliceDeg * deg2rad;
+    const Float gapPx = ((count <= 4) ? 3.0 : ((count <= 8) ? 2.5 : ((count <= 14) ? 2.0 : 1.6))) * invDpi;
+    const Float halfGapDist = gapPx * 0.5;
     const Int32 steps = (count <= 4) ? 18 : ((count <= 8) ? 14 : ((count <= 14) ? 10 : 7));
+
+    auto GetSectorAnglesRad = [sliceRad, halfGapDist](Float r, Float div0, Float& outStart, Float& outEnd)
+    {
+        Float dAng = 0.0;
+        if (r > halfGapDist && r > 0.1)
+        {
+            Float ratio = halfGapDist / r;
+            if (ratio > 0.999) ratio = 0.999;
+            dAng = std::asin(ratio);
+            if (dAng > sliceRad * 0.48)
+                dAng = sliceRad * 0.48;
+        }
+        outStart = div0 + dAng;
+        outEnd = div0 + sliceRad - dAng;
+    };
 
     // 1. Draw circular segments (Fills and active indicators)
     for (Int32 i = 0; i < count; ++i)
@@ -333,9 +349,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
         Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
 
-        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
-        Float aStart = startDeg * deg2rad + gapRad;
-        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
+        Float divRad0 = (270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg) * deg2rad;
+        Float aStartIn, aEndIn, aStartOut, aEndOut;
+        GetSectorAnglesRad(rIn,  divRad0, aStartIn,  aEndIn);
+        GetSectorAnglesRad(rOut, divRad0, aStartOut, aEndOut);
 
         Vector bgCol;
         if (isDragHover)
@@ -363,26 +380,30 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             bgCol = Vector(0.09, 0.10, 0.13);
         }
 
-        drawAnnularSectorPoly(cx, cy, rIn, rOut, aStart, aEnd, bgCol, steps);
+        drawAnnularSectorPoly(cx, cy, rIn, rOut, aStartIn, aEndIn, aStartOut, aEndOut, bgCol, steps);
 
         // Active / Selected illuminated inner arc strip
         Float stripW = (isSelectedOrHovered ? 4.5 : 3.0) * invDpi;
         if (stripW < 1.5) stripW = 1.5;
+        Float rStrip = rIn + stripW;
+        Float aStartStrip, aEndStrip;
+        GetSectorAnglesRad(rStrip, divRad0, aStartStrip, aEndStrip);
+
         if (isDragHover)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(1.0, 1.0, 1.0), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rStrip, aStartIn, aEndIn, aStartStrip, aEndStrip, Vector(1.0, 1.0, 1.0), steps);
         }
         else if (isDragSource)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, Vector(0.25, 0.70, 1.0), steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rStrip, aStartIn, aEndIn, aStartStrip, aEndStrip, Vector(0.25, 0.70, 1.0), steps);
         }
         else if (isSelected)
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, slot.accentColor, steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rStrip, aStartIn, aEndIn, aStartStrip, aEndStrip, slot.accentColor, steps);
         }
         else if (slot.enabled && (slot.commandId > 0 || slot.IsSubMenu()))
         {
-            drawAnnularSectorPoly(cx, cy, rIn, rIn + stripW, aStart, aEnd, slot.accentColor * 0.65, steps);
+            drawAnnularSectorPoly(cx, cy, rIn, rStrip, aStartIn, aEndIn, aStartStrip, aEndStrip, slot.accentColor * 0.65, steps);
         }
     }
 
@@ -398,9 +419,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         Float rIn = isSelectedOrHovered ? hoverInnerR : baseInnerR;
         Float rOut = isSelectedOrHovered ? hoverOuterR : baseOuterR;
 
-        Float startDeg = 270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg;
-        Float aStart = startDeg * deg2rad + gapRad;
-        Float aEnd = (startDeg + sliceDeg) * deg2rad - gapRad;
+        Float divRad0 = (270.0 - sliceDeg * 0.5 + Float(i) * sliceDeg) * deg2rad;
+        Float aStartIn, aEndIn, aStartOut, aEndOut;
+        GetSectorAnglesRad(rIn,  divRad0, aStartIn,  aEndIn);
+        GetSectorAnglesRad(rOut, divRad0, aStartOut, aEndOut);
 
         Vector borderCol;
         Float borderWidth = 1.0;
@@ -435,7 +457,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             borderWidth = 1.0;
         }
 
-        drawAnnularSectorBorder(cx, cy, rIn, rOut, aStart, aEnd, borderCol, borderWidth, steps);
+        drawAnnularSectorBorder(cx, cy, rIn, rOut, aStartIn, aEndIn, aStartOut, aEndOut, borderCol, borderWidth, steps);
     }
 
     // 3. Draw Labels and Icons inside each segment

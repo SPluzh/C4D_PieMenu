@@ -1442,8 +1442,25 @@ void PieMenuOverlay::RenderOverlay()
         if (count > MAX_SLOT_COUNT) count = MAX_SLOT_COUNT;
 
         const float sliceDeg = 360.0f / (float)count;
-        const float gapDeg = (count <= 4) ? 2.2f : ((count <= 8) ? 1.8f : ((count <= 14) ? 1.2f : 0.8f));
+        const float gapPx = (count <= 4) ? 3.0f : ((count <= 8) ? 2.5f : ((count <= 14) ? 2.0f : 1.6f));
+        const float halfGapDist = gapPx * 0.5f;
         const float deg2rad = (float)(PI / 180.0);
+        const float rad2deg = (float)(180.0 / PI);
+
+        auto GetSectorAngles = [sliceDeg, halfGapDist, rad2deg](float r, float div0, float& outStart, float& outSweep)
+        {
+            float dAng = 0.0f;
+            if (r > halfGapDist && r > 0.1f)
+            {
+                float ratio = halfGapDist / r;
+                if (ratio > 0.999f) ratio = 0.999f;
+                dAng = std::asinf(ratio) * rad2deg;
+                if (dAng > sliceDeg * 0.48f)
+                    dAng = sliceDeg * 0.48f;
+            }
+            outStart = div0 + dAng;
+            outSweep = sliceDeg - 2.0f * dAng;
+        };
 
         // 0. Soft radial ambient backdrop shadow behind visible slots and center hub
         {
@@ -1460,11 +1477,14 @@ void PieMenuOverlay::RenderOverlay()
                     shIn = 0.0f;
                 float shOut = rOut + 8.0f;
 
-                float startDeg = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg + gapDeg * 0.5f;
-                float sweepDeg = sliceDeg - gapDeg;
+                float divDeg0 = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg;
+                float startDegShOut, sweepDegShOut;
+                float startDegShIn, sweepDegShIn;
+                GetSectorAngles(shOut, divDeg0, startDegShOut, sweepDegShOut);
+                GetSectorAngles(shIn,  divDeg0, startDegShIn,  sweepDegShIn);
 
-                shadowPath.AddArc(cx - shOut, cy - shOut, shOut * 2.0f, shOut * 2.0f, startDeg, sweepDeg);
-                shadowPath.AddArc(cx - shIn, cy - shIn, shIn * 2.0f, shIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
+                shadowPath.AddArc(cx - shOut, cy - shOut, shOut * 2.0f, shOut * 2.0f, startDegShOut, sweepDegShOut);
+                shadowPath.AddArc(cx - shIn, cy - shIn, shIn * 2.0f, shIn * 2.0f, startDegShIn + sweepDegShIn, -sweepDegShIn);
                 shadowPath.CloseFigure();
             }
 
@@ -1488,12 +1508,15 @@ void PieMenuOverlay::RenderOverlay()
             float rIn = isHovered ? hoverInnerR : baseInnerR;
             float rOut = isHovered ? hoverOuterR : baseOuterR;
 
-            float startDeg = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg + gapDeg * 0.5f;
-            float sweepDeg = sliceDeg - gapDeg;
+            float divDeg0 = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg;
+            float startDegOut, sweepDegOut;
+            float startDegIn, sweepDegIn;
+            GetSectorAngles(rOut, divDeg0, startDegOut, sweepDegOut);
+            GetSectorAngles(rIn,  divDeg0, startDegIn,  sweepDegIn);
 
             Gdiplus::GraphicsPath path;
-            path.AddArc(cx - rOut, cy - rOut, rOut * 2.0f, rOut * 2.0f, startDeg, sweepDeg);
-            path.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
+            path.AddArc(cx - rOut, cy - rOut, rOut * 2.0f, rOut * 2.0f, startDegOut, sweepDegOut);
+            path.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDegIn + sweepDegIn, -sweepDegIn);
             path.CloseFigure();
 
             // Background color
@@ -1525,9 +1548,13 @@ void PieMenuOverlay::RenderOverlay()
             if (isHovered)
             {
                 float stripW = 4.5f;
+                float rStrip = rIn + stripW;
+                float startDegStrip, sweepDegStrip;
+                GetSectorAngles(rStrip, divDeg0, startDegStrip, sweepDegStrip);
+
                 Gdiplus::GraphicsPath stripPath;
-                stripPath.AddArc(cx - (rIn + stripW), cy - (rIn + stripW), (rIn + stripW) * 2.0f, (rIn + stripW) * 2.0f, startDeg, sweepDeg);
-                stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
+                stripPath.AddArc(cx - rStrip, cy - rStrip, rStrip * 2.0f, rStrip * 2.0f, startDegStrip, sweepDegStrip);
+                stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDegIn + sweepDegIn, -sweepDegIn);
                 stripPath.CloseFigure();
                 BYTE ar = (BYTE)(Clamp01(slot.accentColor.x) * 255.0);
                 BYTE ag = (BYTE)(Clamp01(slot.accentColor.y) * 255.0);
@@ -1538,9 +1565,13 @@ void PieMenuOverlay::RenderOverlay()
             else if (hasAction)
             {
                 float stripW = 3.0f;
+                float rStrip = rIn + stripW;
+                float startDegStrip, sweepDegStrip;
+                GetSectorAngles(rStrip, divDeg0, startDegStrip, sweepDegStrip);
+
                 Gdiplus::GraphicsPath stripPath;
-                stripPath.AddArc(cx - (rIn + stripW), cy - (rIn + stripW), (rIn + stripW) * 2.0f, (rIn + stripW) * 2.0f, startDeg, sweepDeg);
-                stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
+                stripPath.AddArc(cx - rStrip, cy - rStrip, rStrip * 2.0f, rStrip * 2.0f, startDegStrip, sweepDegStrip);
+                stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDegIn + sweepDegIn, -sweepDegIn);
                 stripPath.CloseFigure();
                 BYTE ar = (BYTE)(Clamp01(slot.accentColor.x * 0.6) * 255.0);
                 BYTE ag = (BYTE)(Clamp01(slot.accentColor.y * 0.6) * 255.0);
