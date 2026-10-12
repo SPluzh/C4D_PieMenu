@@ -402,6 +402,12 @@ void PieMenuOverlay::Shutdown()
 
     m_initialized = false;
     m_active = false;
+    m_suppressTrigger = false;
+    m_suppressedVk = 0;
+    m_suppressedCtrl = false;
+    m_suppressedShift = false;
+    m_suppressedAlt = false;
+    m_mouseMovedOutsideDeadzone = false;
 #endif
 }
 
@@ -427,6 +433,14 @@ Bool PieMenuOverlay::OpenProfile(PieProfile* profile)
     m_hoverStartTick = 0;
     m_lastHoveredSlot = NOTOK;
     m_pinnedOpen = false;
+    m_mouseMovedOutsideDeadzone = false;
+
+    // Record trigger combo to suppress re-trigger until physically released
+    m_suppressedVk = profile->hotkey.vkCode;
+    m_suppressedCtrl = profile->hotkey.ctrl;
+    m_suppressedShift = profile->hotkey.shift;
+    m_suppressedAlt = profile->hotkey.alt;
+    m_suppressTrigger = false;
 
     POINT pt;
     GetCursorPos(&pt);
@@ -488,6 +502,7 @@ Bool PieMenuOverlay::NavigateToSubmenu(PieProfile* subProfile)
     m_hoveredSlot = NOTOK;
     m_lastHoveredSlot = NOTOK;
     m_hoverStartTick = 0;
+    m_mouseMovedOutsideDeadzone = false;
 
     POINT pt;
     GetCursorPos(&pt);
@@ -529,6 +544,7 @@ Bool PieMenuOverlay::NavigateBack()
     m_hoveredSlot = NOTOK;
     m_lastHoveredSlot = NOTOK;
     m_hoverStartTick = 0;
+    m_mouseMovedOutsideDeadzone = false;
 
     POINT pt;
     GetCursorPos(&pt);
@@ -590,6 +606,15 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
                 return;
             }
         }
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && m_profileStack.IsEmpty() && !fromMouseClick && !m_mouseMovedOutsideDeadzone)
+        {
+            // Released trigger in center hub at root without moving outside -> pin open for click selection!
+            if (!m_pinnedOpen)
+            {
+                m_pinnedOpen = true;
+                return;
+            }
+        }
     }
     else if (!m_profileStack.IsEmpty())
     {
@@ -608,6 +633,15 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
         // Inside a submenu, if user released trigger or clicked empty space,
         // pin the submenu open so the user can see choices and select them
         if (!m_pinnedOpen)
+        {
+            m_pinnedOpen = true;
+            return;
+        }
+    }
+    else if (!fromMouseClick && m_profileStack.IsEmpty())
+    {
+        // Released trigger at root menu while in center deadzone without moving out -> pin open for click selection!
+        if (!m_mouseMovedOutsideDeadzone && !m_pinnedOpen)
         {
             m_pinnedOpen = true;
             return;
@@ -665,6 +699,14 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
     m_hoverStartTick = 0;
     m_lastHoveredSlot = NOTOK;
     m_pinnedOpen = false;
+    m_mouseMovedOutsideDeadzone = false;
+
+    // Suppress re-triggering until the trigger key/combination is physically released
+    m_suppressTrigger = true;
+    if (m_currentKeyDown != 0 && m_suppressedVk == 0)
+    {
+        m_suppressedVk = (Int32)m_currentKeyDown;
+    }
 
     if (hasSlotToCall)
     {
@@ -893,6 +935,14 @@ void PieMenuOverlay::CancelAndClose()
     m_hoverStartTick = 0;
     m_lastHoveredSlot = NOTOK;
     m_pinnedOpen = false;
+    m_mouseMovedOutsideDeadzone = false;
+
+    // Suppress re-triggering until the trigger key/combination is physically released
+    m_suppressTrigger = true;
+    if (m_currentKeyDown != 0 && m_suppressedVk == 0)
+    {
+        m_suppressedVk = (Int32)m_currentKeyDown;
+    }
     StatusSetText(""_s);
 #endif
 }
@@ -1098,6 +1148,44 @@ void PieMenuOverlay::CheckTrigger()
     }
     else
     {
+        if (m_suppressTrigger)
+        {
+            // Check if the previous trigger is still physically down
+            bool stillHeld = false;
+            if (m_suppressedVk != 0)
+            {
+                Int32 vk = m_suppressedVk;
+                if (vk >= 'a' && vk <= 'z') vk = toupper(vk);
+                if (((GetAsyncKeyState(vk) & 0x8000) != 0) || (m_currentKeyDown == (UInt32)vk))
+                {
+                    stillHeld = true;
+                }
+            }
+            else if (m_suppressedCtrl || m_suppressedShift || m_suppressedAlt)
+            {
+                bool cDown = ((GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LCONTROL) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RCONTROL) & 0x8000) != 0);
+                bool sDown = ((GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LSHIFT) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0);
+                bool aDown = ((GetAsyncKeyState(VK_MENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_LMENU) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RMENU) & 0x8000) != 0);
+                if ((m_suppressedCtrl && cDown) || (m_suppressedShift && sDown) || (m_suppressedAlt && aDown))
+                {
+                    stillHeld = true;
+                }
+            }
+
+            if (stillHeld)
+            {
+                // Trigger key is still being held down since previous menu execution — do not re-open!
+                return;
+            }
+
+            // Key has been physically released! Clear suppression
+            m_suppressTrigger = false;
+            m_suppressedVk = 0;
+            m_suppressedCtrl = false;
+            m_suppressedShift = false;
+            m_suppressedAlt = false;
+        }
+
         PieProfileManager& mgr = PieProfileManager::Get();
         BaseDocument* doc = GetActiveDocument();
         PieContextMode desired = GetContextModeForDoc(doc);
@@ -1185,6 +1273,11 @@ Bool PieMenuOverlay::UpdateHover(Float dx, Float dy)
 
     Float dist = std::sqrt(dx * dx + dy * dy);
     const Float deadzone = (m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0;
+
+    if (dist >= deadzone)
+    {
+        m_mouseMovedOutsideDeadzone = true;
+    }
 
     if (dist < deadzone)
     {
@@ -1296,7 +1389,12 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
 
         case WM_LBUTTONDOWN:
         {
-            // Do not commit on mouse down; wait for WM_LBUTTONUP so click executes once
+            if (m_active)
+            {
+                POINT pt;
+                GetCursorPos(&pt);
+                OnMouseMove(pt.x, pt.y);
+            }
             return 0;
         }
 
@@ -1304,6 +1402,9 @@ Int64 PieMenuOverlay::HandleMessage(void* hwndVal, UInt32 msg, UInt64 wParam, In
         {
             if (m_active)
             {
+                POINT pt;
+                GetCursorPos(&pt);
+                OnMouseMove(pt.x, pt.y);
                 CommitAndClose(true);
             }
             return 0;

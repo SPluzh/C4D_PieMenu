@@ -87,14 +87,15 @@
 
 | Action / Gesture | Description |
 |---|---|
-| **Hold Configured Hotkey** | Instantly opens the radial pie menu under the cursor |
+| **Tap Configured Hotkey** | Opens and pins the pie menu under cursor for browsing and LMB click selection |
+| **Hold Configured Hotkey** | Opens the radial pie menu for quick gesture flicking or hold-and-click |
 | **Move Mouse** | Highlights the targeted slot with popout and laser pointer |
-| **Release Hotkey** | Executes the active slot command immediately (**Press & Flick**) |
+| **Release Hotkey** | In gesture mode: executes the active slot command immediately (**Press & Flick**); in center: cancels or pins menu |
+| **LMB Click** | Executes the active command (closes cleanly without re-opening), or pins/opens a submenu slot |
 | **Hold Alt while executing** | Makes new generator/object parent of selection (or custom Alt action) |
 | **Hold Shift while executing** | Makes new deformer child of selection, or opens tool options (or custom Shift action) |
 | **Hold Ctrl while executing** | Places newly created object at world origin (or custom Ctrl action) |
 | **Hover Submenu Slot** | Instantly expands submenu under cursor (zero delay); flick into any submenu command |
-| **LMB Click** | Executes command, or pins and opens a submenu slot |
 | **Center Hub (`Back`)** | In submenu: returns to parent menu |
 | **`Backspace` / RMB in Submenu** | Returns back to parent menu |
 | **RMB Click at root or `Esc`** | Cancels and closes the menu without executing |

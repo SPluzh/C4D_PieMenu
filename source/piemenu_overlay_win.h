@@ -66,6 +66,13 @@ private:
     UInt32      m_hoverStartTick = 0;
     Int32       m_lastHoveredSlot = NOTOK;
     bool        m_pinnedOpen = false;
+    bool        m_mouseMovedOutsideDeadzone = false;
+
+    bool        m_suppressTrigger = false;
+    Int32       m_suppressedVk = 0;
+    bool        m_suppressedCtrl = false;
+    bool        m_suppressedShift = false;
+    bool        m_suppressedAlt = false;
 };
 
 } // namespace cinema
