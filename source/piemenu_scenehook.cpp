@@ -241,13 +241,14 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         bd->DrawArrayEnd();
     };
 
-    // Radii & spacing (proportional scaling if user customized radius)
-    Float radiusScale = (m_activeProfile->radius > 20.0) ? (m_activeProfile->radius / 85.0) : 1.0;
+    // Radii & spacing
+    Float outRVal = (m_activeProfile->outerRadius > 20.0) ? m_activeProfile->outerRadius : 112.0;
+    Float inRVal = (m_activeProfile->innerRadius > 5.0) ? m_activeProfile->innerRadius : 36.0;
     const Float deadzoneRadius = (m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0;
-    const Float baseInnerR = 36.0 * radiusScale;
-    const Float baseOuterR = 112.0 * radiusScale;
-    const Float hoverInnerR = 33.0 * radiusScale;
-    const Float hoverOuterR = 125.0 * radiusScale; // Pops out by 13px on hover
+    const Float baseInnerR = inRVal;
+    const Float baseOuterR = outRVal;
+    const Float hoverInnerR = (inRVal > 3.0) ? (inRVal - 3.0) : inRVal;
+    const Float hoverOuterR = outRVal + 13.0; // Pops out by 13px on hover
 
     Int32 count = m_activeProfile->slotCount;
     if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
@@ -297,12 +298,12 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         if (isHovered)
         {
             Vector activeStripCol = slot.accentColor;
-            drawAnnularSector(ox, oy, rIn, rIn + 4.5 * radiusScale, aStart, aEnd, activeStripCol, steps);
+            drawAnnularSector(ox, oy, rIn, rIn + 4.5, aStart, aEnd, activeStripCol, steps);
         }
         else if (hasAction)
         {
             Vector activeStripCol = slot.accentColor * 0.6;
-            drawAnnularSector(ox, oy, rIn, rIn + 3.0 * radiusScale, aStart, aEnd, activeStripCol, steps);
+            drawAnnularSector(ox, oy, rIn, rIn + 3.0, aStart, aEnd, activeStripCol, steps);
         }
     }
 

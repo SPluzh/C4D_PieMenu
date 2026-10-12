@@ -98,7 +98,9 @@ struct PieProfile
     Bool           showTitle = true;
     PieSlot        slots[TOTAL_SLOT_COUNT]; // 0..23 radial, 24 is Center Hub (CENTER_SLOT_INDEX)
     PieHotkey      hotkey;
-    Float          radius = 85.0;
+    Float          outerRadius = 112.0;
+    Float          innerRadius = 36.0;
+    Float          radius = 112.0;
     Float          deadzone = 26.0;
     Float          iconSize = 24.0;
     PieDisplayMode displayMode = PieDisplayMode::IconAndLabel;
@@ -146,7 +148,9 @@ public:
     // Global settings
     Bool  m_useCtrlShift = false; // Legacy (retained for binary file compatibility)
     Int32 m_triggerKey = 'V';     // Legacy (retained for binary file compatibility)
-    Float m_radius = 85.0;
+    Float m_outerRadius = 112.0;
+    Float m_innerRadius = 36.0;
+    Float m_radius = 112.0;
     Float m_deadzone = 26.0;
     Float m_iconSize = 24.0;
     PieDisplayMode m_displayMode = PieDisplayMode::IconAndLabel;

@@ -45,6 +45,7 @@ enum
     IDC_INSPECTOR_ALT_CLEAR,
     IDC_INSPECTOR_CLEAR_SLOT,
     IDC_GLOBAL_RADIUS,
+    IDC_GLOBAL_INNER_RADIUS,
     IDC_GLOBAL_DEADZONE,
     IDC_GLOBAL_ICON_SIZE,
     IDC_GLOBAL_DISPLAY_MODE,
@@ -669,8 +670,11 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(6, 4);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Radius:"_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Outer Radius:"_s, 0);
     AddEditSlider(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 110, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Inner Radius:"_s, 0);
+    AddEditSlider(IDC_GLOBAL_INNER_RADIUS, BFH_SCALEFIT, 110, 0);
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone:"_s, 0);
     AddEditSlider(IDC_GLOBAL_DEADZONE, BFH_SCALEFIT, 110, 0);
@@ -680,6 +684,8 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Display Style:"_s, 0);
     AddComboBox(IDC_GLOBAL_DISPLAY_MODE, BFH_SCALEFIT, 130, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
 
     GroupEnd();
 
@@ -1115,7 +1121,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
 
-    SetFloat(IDC_GLOBAL_RADIUS, prof->radius, 40.0, 250.0, 1.0);
+    SetFloat(IDC_GLOBAL_RADIUS, prof->outerRadius, 40.0, 300.0, 1.0);
+    SetFloat(IDC_GLOBAL_INNER_RADIUS, prof->innerRadius, 10.0, 200.0, 1.0);
     SetFloat(IDC_GLOBAL_DEADZONE, prof->deadzone, 10.0, 80.0, 1.0);
     SetFloat(IDC_GLOBAL_ICON_SIZE, prof->iconSize, 12.0, 64.0, 1.0);
     SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)prof->displayMode);
@@ -1149,13 +1156,24 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
         prof->showTitle = st;
 
-    Float r = 85.0;
-    if (GetFloat(IDC_GLOBAL_RADIUS, r))
+    Float outR = 112.0;
+    if (GetFloat(IDC_GLOBAL_RADIUS, outR))
     {
-        if (r < 30.0) r = 30.0;
-        if (r > 300.0) r = 300.0;
-        prof->radius = r;
-        mgr.m_radius = r;
+        if (outR < 30.0) outR = 30.0;
+        if (outR > 300.0) outR = 300.0;
+        prof->outerRadius = outR;
+        prof->radius = outR;
+        mgr.m_outerRadius = outR;
+        mgr.m_radius = outR;
+    }
+
+    Float inR = 36.0;
+    if (GetFloat(IDC_GLOBAL_INNER_RADIUS, inR))
+    {
+        if (inR < 10.0) inR = 10.0;
+        if (inR > 250.0) inR = 250.0;
+        prof->innerRadius = inR;
+        mgr.m_innerRadius = inR;
     }
 
     Float dz = 26.0;
@@ -1910,16 +1928,37 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
         case IDC_GLOBAL_RADIUS:
         {
-            Float r = 85.0;
-            if (GetFloat(IDC_GLOBAL_RADIUS, r))
+            Float outR = 112.0;
+            if (GetFloat(IDC_GLOBAL_RADIUS, outR))
             {
-                if (r < 30.0) r = 30.0;
-                if (r > 300.0) r = 300.0;
+                if (outR < 30.0) outR = 30.0;
+                if (outR > 300.0) outR = 300.0;
                 Int32 curIdx = m_userArea.GetActiveProfileIndex();
                 PieProfile* prof = mgr.GetProfile(curIdx);
                 if (prof)
-                    prof->radius = r;
-                mgr.m_radius = r;
+                {
+                    prof->outerRadius = outR;
+                    prof->radius = outR;
+                }
+                mgr.m_outerRadius = outR;
+                mgr.m_radius = outR;
+                m_userArea.Redraw();
+            }
+            break;
+        }
+
+        case IDC_GLOBAL_INNER_RADIUS:
+        {
+            Float inR = 36.0;
+            if (GetFloat(IDC_GLOBAL_INNER_RADIUS, inR))
+            {
+                if (inR < 10.0) inR = 10.0;
+                if (inR > 250.0) inR = 250.0;
+                Int32 curIdx = m_userArea.GetActiveProfileIndex();
+                PieProfile* prof = mgr.GetProfile(curIdx);
+                if (prof)
+                    prof->innerRadius = inR;
+                mgr.m_innerRadius = inR;
                 m_userArea.Redraw();
             }
             break;
@@ -2076,7 +2115,8 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 if (targetIndex < 0) targetIndex = 0;
                 SelectProfile(targetIndex);
 
-                SetFloat(IDC_GLOBAL_RADIUS, mgr.m_radius);
+                SetFloat(IDC_GLOBAL_RADIUS, mgr.m_outerRadius);
+                SetFloat(IDC_GLOBAL_INNER_RADIUS, mgr.m_innerRadius);
                 SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
                 SetFloat(IDC_GLOBAL_ICON_SIZE, mgr.m_iconSize);
                 SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)mgr.m_displayMode);
@@ -2173,6 +2213,7 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                 }
             }
             else if (msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_RADIUS ||
+                     msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_INNER_RADIUS ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_DEADZONE ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_ICON_SIZE ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_DISPLAY_MODE)
@@ -2181,13 +2222,23 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                 PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
                 if (prof)
                 {
-                    Float r = 85.0;
-                    if (GetFloat(IDC_GLOBAL_RADIUS, r))
+                    Float outR = 112.0;
+                    if (GetFloat(IDC_GLOBAL_RADIUS, outR))
                     {
-                        if (r < 30.0) r = 30.0;
-                        if (r > 300.0) r = 300.0;
-                        prof->radius = r;
-                        mgr.m_radius = r;
+                        if (outR < 30.0) outR = 30.0;
+                        if (outR > 300.0) outR = 300.0;
+                        prof->outerRadius = outR;
+                        prof->radius = outR;
+                        mgr.m_outerRadius = outR;
+                        mgr.m_radius = outR;
+                    }
+                    Float inR = 36.0;
+                    if (GetFloat(IDC_GLOBAL_INNER_RADIUS, inR))
+                    {
+                        if (inR < 10.0) inR = 10.0;
+                        if (inR > 250.0) inR = 250.0;
+                        prof->innerRadius = inR;
+                        mgr.m_innerRadius = inR;
                     }
                     Float dz = 26.0;
                     if (GetFloat(IDC_GLOBAL_DEADZONE, dz))

@@ -1431,12 +1431,11 @@ void PieMenuOverlay::RenderOverlay()
         const float cx = (float)(OVERLAY_SIZE * 0.5f);
         const float cy = (float)(OVERLAY_SIZE * 0.5f);
 
-        float radiusScale = (float)((m_activeProfile->radius > 20.0) ? (m_activeProfile->radius / 85.0) : 1.0);
         const float deadzoneRadius = (float)((m_activeProfile->deadzone > 0.0) ? m_activeProfile->deadzone : 26.0);
-        const float baseInnerR = 36.0f * radiusScale;
-        const float baseOuterR = 112.0f * radiusScale;
-        const float hoverInnerR = 33.0f * radiusScale;
-        const float hoverOuterR = 125.0f * radiusScale;
+        const float baseInnerR = (float)m_activeProfile->innerRadius;
+        const float baseOuterR = (float)m_activeProfile->outerRadius;
+        const float hoverInnerR = (baseInnerR > 3.0f) ? (baseInnerR - 3.0f) : baseInnerR;
+        const float hoverOuterR = baseOuterR + 13.0f;
 
         Int32 count = m_activeProfile->slotCount;
         if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
@@ -1456,10 +1455,10 @@ void PieMenuOverlay::RenderOverlay()
 
                 float rIn = (m_hoveredSlot == i) ? hoverInnerR : baseInnerR;
                 float rOut = (m_hoveredSlot == i) ? hoverOuterR : baseOuterR;
-                float shIn = rIn - 4.0f * radiusScale;
+                float shIn = rIn - 4.0f;
                 if (shIn < 0.0f)
                     shIn = 0.0f;
-                float shOut = rOut + 8.0f * radiusScale;
+                float shOut = rOut + 8.0f;
 
                 float startDeg = 270.0f - sliceDeg * 0.5f + (float)i * sliceDeg + gapDeg * 0.5f;
                 float sweepDeg = sliceDeg - gapDeg;
@@ -1525,7 +1524,7 @@ void PieMenuOverlay::RenderOverlay()
             // Active glow inner strip
             if (isHovered)
             {
-                float stripW = 4.5f * radiusScale;
+                float stripW = 4.5f;
                 Gdiplus::GraphicsPath stripPath;
                 stripPath.AddArc(cx - (rIn + stripW), cy - (rIn + stripW), (rIn + stripW) * 2.0f, (rIn + stripW) * 2.0f, startDeg, sweepDeg);
                 stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
@@ -1538,7 +1537,7 @@ void PieMenuOverlay::RenderOverlay()
             }
             else if (hasAction)
             {
-                float stripW = 3.0f * radiusScale;
+                float stripW = 3.0f;
                 Gdiplus::GraphicsPath stripPath;
                 stripPath.AddArc(cx - (rIn + stripW), cy - (rIn + stripW), (rIn + stripW) * 2.0f, (rIn + stripW) * 2.0f, startDeg, sweepDeg);
                 stripPath.AddArc(cx - rIn, cy - rIn, rIn * 2.0f, rIn * 2.0f, startDeg + sweepDeg, -sweepDeg);
@@ -1676,7 +1675,11 @@ void PieMenuOverlay::RenderOverlay()
                 float ix = cx + std::cos(midRad) * rMid;
                 float iy = cy + std::sin(midRad) * rMid;
 
-                float iconSz = (isHovered ? (baseIconSz * 1.15f) : baseIconSz) * radiusScale;
+                float iconSz = isHovered ? (baseIconSz * 1.15f) : baseIconSz;
+                if (iconSz > (rOut - rIn) * 0.85f)
+                    iconSz = (rOut - rIn) * 0.85f;
+                if (iconSz < 8.0f)
+                    iconSz = 8.0f;
 
                 if (isHovered)
                 {
@@ -1689,14 +1692,18 @@ void PieMenuOverlay::RenderOverlay()
             else if (dispMode == PieDisplayMode::IconAndLabel && pIconBmp != nullptr)
             {
                 // Both icon and label: icon shifted inward, label shifted outward
-                float offset = (baseIconSz * 0.45f + 2.0f) * radiusScale;
+                float offset = baseIconSz * 0.45f + 2.0f;
                 float rIcon = rMid - offset;
-                float rLabel = rMid + offset + 2.0f * radiusScale;
+                float rLabel = rMid + offset + 2.0f;
 
                 float ix = cx + std::cos(midRad) * rIcon;
                 float iy = cy + std::sin(midRad) * rIcon;
 
-                float iconSz = (isHovered ? (baseIconSz * 1.1f) : baseIconSz) * radiusScale;
+                float iconSz = isHovered ? (baseIconSz * 1.1f) : baseIconSz;
+                if (iconSz > (rOut - rIn) * 0.85f)
+                    iconSz = (rOut - rIn) * 0.85f;
+                if (iconSz < 8.0f)
+                    iconSz = 8.0f;
 
                 if (isHovered)
                 {
