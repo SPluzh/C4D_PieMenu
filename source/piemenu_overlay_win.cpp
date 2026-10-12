@@ -580,6 +580,7 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
         return;
 
     const bool stayOpenOnRelease = m_activeProfile ? m_activeProfile->stayOpenOnRelease : PieProfileManager::Get().m_stayOpenOnRelease;
+    const bool stayOpenWithCenter = m_activeProfile ? m_activeProfile->stayOpenWithCenterCommand : PieProfileManager::Get().m_stayOpenWithCenterCommand;
 
     if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
@@ -594,27 +595,53 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
                 return;
             }
         }
-        else if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty() && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty())
         {
-            if (fromMouseClick)
+            const bool hasCenterCmd = slot.enabled && (slot.commandId > 0 || slot.HasModifierCommands() || slot.IsSubMenu());
+            if (!hasCenterCmd)
             {
-                NavigateBack();
-                return;
+                if (fromMouseClick)
+                {
+                    NavigateBack();
+                    return;
+                }
+                else
+                {
+                    // Released trigger while in center hub of submenu - pin open so user can browse
+                    m_pinnedOpen = true;
+                    return;
+                }
             }
             else
             {
-                // Released trigger while in center hub of submenu - pin open so user can browse
-                m_pinnedOpen = true;
-                return;
+                if (!fromMouseClick && stayOpenOnRelease && stayOpenWithCenter && !m_pinnedOpen)
+                {
+                    m_pinnedOpen = true;
+                    return;
+                }
             }
         }
-        else if (m_hoveredSlot == CENTER_SLOT_INDEX && m_profileStack.IsEmpty() && !fromMouseClick && (!slot.enabled || (slot.commandId <= 0 && !slot.IsSubMenu())))
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && m_profileStack.IsEmpty() && !fromMouseClick)
         {
-            // Released trigger in center hub at root
-            if (stayOpenOnRelease && !m_pinnedOpen)
+            const bool hasCenterCmd = slot.enabled && (slot.commandId > 0 || slot.HasModifierCommands() || slot.IsSubMenu());
+            if (!hasCenterCmd)
             {
-                m_pinnedOpen = true;
-                return;
+                // Released trigger in empty center hub at root
+                if (stayOpenOnRelease && !m_pinnedOpen)
+                {
+                    m_pinnedOpen = true;
+                    return;
+                }
+            }
+            else
+            {
+                // Center hub has command assigned.
+                // If stayOpenWithCenter is enabled along with stayOpenOnRelease, keep open on key release instead of executing center command.
+                if (stayOpenOnRelease && stayOpenWithCenter && !m_pinnedOpen)
+                {
+                    m_pinnedOpen = true;
+                    return;
+                }
             }
         }
         else if (!fromMouseClick && m_profileStack.IsEmpty() && stayOpenOnRelease && (!slot.enabled || (slot.commandId <= 0 && !slot.HasModifierCommands())))
@@ -1474,7 +1501,7 @@ Bool PieMenuOverlay::UpdateHover(Float dx, Float dy)
 
     if (dist < deadzone)
     {
-        if (m_activeProfile->slots[CENTER_SLOT_INDEX].enabled && (m_activeProfile->slots[CENTER_SLOT_INDEX].commandId > 0 || m_activeProfile->slots[CENTER_SLOT_INDEX].IsSubMenu()))
+        if (m_activeProfile->slots[CENTER_SLOT_INDEX].enabled && (m_activeProfile->slots[CENTER_SLOT_INDEX].commandId > 0 || m_activeProfile->slots[CENTER_SLOT_INDEX].IsSubMenu() || m_activeProfile->slots[CENTER_SLOT_INDEX].HasModifierCommands()))
         {
             m_hoveredSlot = CENTER_SLOT_INDEX;
         }

@@ -105,6 +105,7 @@ struct PieProfile
     Float          iconSize = 24.0;
     PieDisplayMode displayMode = PieDisplayMode::IconAndLabel;
     Bool           stayOpenOnRelease = false;
+    Bool           stayOpenWithCenterCommand = false;
 
     Float GetSlotAngle(Int32 index) const;
     Int32 AngleToSlot(Float deg, Float dist, Float deadzone) const;
@@ -156,6 +157,7 @@ public:
     Float m_iconSize = 24.0;
     PieDisplayMode m_displayMode = PieDisplayMode::IconAndLabel;
     Bool           m_stayOpenOnRelease = false;
+    Bool           m_stayOpenWithCenterCommand = false;
 
 private:
     PieProfileManager();

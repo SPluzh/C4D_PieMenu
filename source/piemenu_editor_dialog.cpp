@@ -25,6 +25,7 @@ enum
     IDC_SLOTCOUNT_SLIDER,
     IDC_PROFILE_SHOW_TITLE,
     IDC_PROFILE_STAY_OPEN_ON_RELEASE,
+    IDC_PROFILE_STAY_OPEN_CENTER,
 
     IDC_USERAREA_PIE,
     IDC_GROUP_INSPECTOR,
@@ -668,10 +669,11 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddEditSlider(IDC_SLOTCOUNT_SLIDER, BFH_LEFT, 90, 0);
     GroupEnd();
 
-    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
     GroupSpace(16, 0);
     AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
     AddCheckbox(IDC_PROFILE_STAY_OPEN_ON_RELEASE, BFH_LEFT, 0, 0, "Stay Open on Key Release"_s);
+    AddCheckbox(IDC_PROFILE_STAY_OPEN_CENTER, BFH_LEFT, 0, 0, "Stay Open with Center Command"_s);
     GroupEnd();
 
     GroupEnd();
@@ -1125,6 +1127,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
         SetInt32(IDC_SLOTCOUNT_SLIDER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetBool(IDC_PROFILE_SHOW_TITLE, true);
         SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, false);
+        SetBool(IDC_PROFILE_STAY_OPEN_CENTER, false);
+        Enable(IDC_PROFILE_STAY_OPEN_CENTER, false);
         return;
     }
 
@@ -1133,6 +1137,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
     SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, prof->stayOpenOnRelease);
+    SetBool(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenWithCenterCommand);
+    Enable(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenOnRelease);
 
     SetFloat(IDC_GLOBAL_RADIUS, prof->outerRadius, 40.0, 300.0, 1.0);
     SetFloat(IDC_GLOBAL_INNER_RADIUS, prof->innerRadius, 10.0, 200.0, 1.0);
@@ -1174,6 +1180,13 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     {
         prof->stayOpenOnRelease = so;
         mgr.m_stayOpenOnRelease = so;
+    }
+
+    Bool soc = false;
+    if (GetBool(IDC_PROFILE_STAY_OPEN_CENTER, soc))
+    {
+        prof->stayOpenWithCenterCommand = soc;
+        mgr.m_stayOpenWithCenterCommand = soc;
     }
 
     Float outR = 112.0;
@@ -1746,6 +1759,22 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 {
                     prof->stayOpenOnRelease = so;
                     mgr.m_stayOpenOnRelease = so;
+                    Enable(IDC_PROFILE_STAY_OPEN_CENTER, so);
+                }
+            }
+            break;
+        }
+
+        case IDC_PROFILE_STAY_OPEN_CENTER:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Bool soc = false;
+                if (GetBool(IDC_PROFILE_STAY_OPEN_CENTER, soc))
+                {
+                    prof->stayOpenWithCenterCommand = soc;
+                    mgr.m_stayOpenWithCenterCommand = soc;
                 }
             }
             break;

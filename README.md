@@ -75,6 +75,7 @@
   - **Dynamic Slot Count**: Adjust radial slice count from 2 up to 24 items using an interactive numeric slider with real-time preview.
   - Toggle *Show Menu Title* badge.
   - Toggle *Stay Open on Key Release*: When checked, releasing the trigger hotkey keeps the menu open for mouse click selection. When unchecked (default), releasing the hotkey executes the hovered slot or immediately closes without executing if in the center deadzone.
+  - Toggle *Stay Open with Center Command*: When checked alongside *Stay Open on Key Release*, releasing the trigger hotkey keeps the menu open even if a command is assigned to the center slot (the center command will only be executed upon explicit mouse click). When unchecked, releasing the hotkey in the center hub executes the assigned center command immediately.
 - **Import & Export Settings**:
   - **Export Settings...**: Export either all menu profiles and global radius/deadzone settings or only the active menu profile to readable `.json` files (includes full submenu hierarchies).
   - **Import Settings...**: Seamlessly load configuration from `.json` or binary `.dat` files with interactive prompt to either Replace all menus or Append/Merge new menus into your current configuration.
