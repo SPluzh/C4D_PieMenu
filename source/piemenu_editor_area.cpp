@@ -766,6 +766,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
 
     // 8. Bottom hint
+    Int32 hintY = h - 22;
     if (m_dragSourceSlot != NOTOK && m_dragHoverSlot != NOTOK && m_dragHoverSlot != m_dragSourceSlot)
     {
 #if defined(MAXON_TARGET_WINDOWS)
@@ -778,18 +779,18 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         if (ctrlHeld)
         {
             DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
-            DrawText("Release to duplicate slot to target"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to duplicate slot to target"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
         else
         {
             DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
-            DrawText("Release to swap slots | Hold Ctrl to duplicate"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to swap slots | Hold Ctrl to duplicate"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
     }
     else if (m_dragSourceSlot != NOTOK)
     {
         DrawSetTextCol(Vector(0.5, 0.8, 1.0), COLOR_TRANS);
-        DrawText("Drag to another slot to move or swap"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        DrawText("Drag to another slot to move or swap"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
     }
     else if (m_dragHoverSlot != NOTOK)
     {
@@ -803,28 +804,28 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         if (shiftHeld)
         {
             DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
-            DrawText("Release to assign as [SHIFT] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to assign as [SHIFT] action"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
         else if (ctrlHeld)
         {
             DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
-            DrawText("Release to assign as [CTRL] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to assign as [CTRL] action"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
         else if (altHeld)
         {
             DrawSetTextCol(Vector(0.3, 0.95, 0.5), COLOR_TRANS);
-            DrawText("Release to assign as [ALT] action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to assign as [ALT] action"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
         else
         {
             DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
-            DrawText("Release to assign | Hold Shift/Ctrl/Alt for modifier action"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+            DrawText("Release to assign | Hold Shift/Ctrl/Alt for modifier action"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
         }
     }
     else
     {
         DrawSetTextCol(Vector(0.52, 0.55, 0.60), COLOR_TRANS);
-        DrawText("Click slot to inspect | Drag slots to rearrange | Drag command or submenu to assign"_s, (Int32)cx, h - 14, DRAWTEXT_HALIGN_CENTER);
+        DrawText("Click slot to inspect | Drag slots to rearrange | Drag command or submenu to assign"_s, (Int32)cx, hintY, DRAWTEXT_HALIGN_CENTER);
     }
 }
 
