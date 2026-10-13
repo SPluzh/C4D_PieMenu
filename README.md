@@ -2,7 +2,10 @@
 
 ![](attachments/C4D_PieMenu.gif)
 
-**C4D_PieMenu** is a fast, highly customizable radial marking menu (pie menu) plugin for Maxon Cinema 4D (supporting Cinema 4D 2025 and 2026). It brings rapid gesture-based tool and command execution directly under your mouse cursor (**Press & Flick**), alongside an interactive graphical profile editor with full **Drag & Drop** command assignment.
+**C4D_PieMenu** is a fast, highly customizable radial marking menu (pie menu) plugin for Maxon Cinema 4D on **Windows** (supporting Cinema 4D 2025 and 2026). It brings rapid gesture-based tool and command execution directly under your mouse cursor (**Press & Flick**), alongside an interactive graphical profile editor with full **Drag & Drop** command assignment.
+
+> [!NOTE]
+> **Windows Only**: C4D_PieMenu is built exclusively for **Windows** (Windows 10 / 11 64-bit). It relies on native Win32 APIs and low-level input hooks for zero-latency overlay rendering. macOS is not supported.
 
 ---
 
@@ -106,6 +109,9 @@
 ---
 
 ## Installation
+
+> [!IMPORTANT]
+> **Supported Platform**: Windows 10 / 11 (64-bit) only. macOS is not supported.
 
 1. Download or extract the release archive (`C4D_PieMenu_v<version>.zip`).
 2. Copy the `C4D_PieMenu` folder corresponding to your Cinema 4D version (`2025` or `2026`) into your Cinema 4D plugins directory:
