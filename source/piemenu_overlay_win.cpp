@@ -579,8 +579,9 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
     if (!m_active)
         return;
 
-    const bool stayOpenOnRelease = m_activeProfile ? m_activeProfile->stayOpenOnRelease : PieProfileManager::Get().m_stayOpenOnRelease;
-    const bool stayOpenWithCenter = m_activeProfile ? m_activeProfile->stayOpenWithCenterCommand : PieProfileManager::Get().m_stayOpenWithCenterCommand;
+    const PieProfile* rootProfile = (!m_profileStack.IsEmpty() && m_profileStack[0]) ? m_profileStack[0] : m_activeProfile;
+    const bool stayOpenOnRelease = rootProfile ? rootProfile->stayOpenOnRelease : (m_activeProfile ? m_activeProfile->stayOpenOnRelease : PieProfileManager::Get().m_stayOpenOnRelease);
+    const bool stayOpenWithCenter = rootProfile ? rootProfile->stayOpenWithCenterCommand : (m_activeProfile ? m_activeProfile->stayOpenWithCenterCommand : PieProfileManager::Get().m_stayOpenWithCenterCommand);
 
     if (m_activeProfile && m_hoveredSlot >= 0 && (m_hoveredSlot < m_activeProfile->slotCount || m_hoveredSlot == CENTER_SLOT_INDEX))
     {
@@ -590,9 +591,20 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
             PieProfile* sub = PieProfileManager::Get().FindProfileByName(slot.subMenuName);
             if (sub && CanNavigateTo(sub))
             {
-                NavigateToSubmenu(sub);
-                m_pinnedOpen = true;
-                return;
+                if (fromMouseClick)
+                {
+                    NavigateToSubmenu(sub);
+                    m_pinnedOpen = true;
+                    return;
+                }
+                else if (stayOpenOnRelease)
+                {
+                    NavigateToSubmenu(sub);
+                    m_pinnedOpen = true;
+                    return;
+                }
+                // When releasing trigger and stayOpenOnRelease is false, do not pin open or navigate.
+                // Fall through to close overlay.
             }
         }
         else if (m_hoveredSlot == CENTER_SLOT_INDEX && !m_profileStack.IsEmpty())
@@ -607,9 +619,12 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
                 }
                 else
                 {
-                    // Released trigger while in center hub of submenu - pin open so user can browse
-                    m_pinnedOpen = true;
-                    return;
+                    // Released trigger while in center hub of submenu
+                    if (stayOpenOnRelease && !m_pinnedOpen)
+                    {
+                        m_pinnedOpen = true;
+                        return;
+                    }
                 }
             }
             else
@@ -644,9 +659,9 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
                 }
             }
         }
-        else if (!fromMouseClick && m_profileStack.IsEmpty() && stayOpenOnRelease && (!slot.enabled || (slot.commandId <= 0 && !slot.HasModifierCommands())))
+        else if (!fromMouseClick && stayOpenOnRelease && (!slot.enabled || (slot.commandId <= 0 && !slot.HasModifierCommands())))
         {
-            // Released trigger over an unassigned slot at root with stayOpenOnRelease enabled -> pin open
+            // Released trigger over an unassigned slot with stayOpenOnRelease enabled -> pin open
             if (!m_pinnedOpen)
             {
                 m_pinnedOpen = true;
@@ -654,35 +669,31 @@ void PieMenuOverlay::CommitAndClose(bool fromMouseClick)
             }
         }
     }
-    else if (!m_profileStack.IsEmpty())
+    else
     {
-        // Check if inside center deadzone (Back button) when clicked with mouse
-        Float dx = Float(m_currentScreenX - m_originScreenX);
-        Float dy = Float(m_currentScreenY - m_originScreenY);
-        Float dist = std::sqrt(dx * dx + dy * dy);
-        PieProfileManager& mgr = PieProfileManager::Get();
-        const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
-        if (fromMouseClick && dist < deadzone)
+        if (!m_profileStack.IsEmpty())
         {
-            NavigateBack();
-            return;
+            // Check if inside center deadzone (Back button) when clicked with mouse
+            Float dx = Float(m_currentScreenX - m_originScreenX);
+            Float dy = Float(m_currentScreenY - m_originScreenY);
+            Float dist = std::sqrt(dx * dx + dy * dy);
+            PieProfileManager& mgr = PieProfileManager::Get();
+            const Float deadzone = (mgr.m_deadzone > 0.0) ? mgr.m_deadzone : 26.0;
+            if (fromMouseClick && dist < deadzone)
+            {
+                NavigateBack();
+                return;
+            }
         }
 
-        // Inside a submenu, if user released trigger or clicked empty space,
-        // pin the submenu open so the user can see choices and select them
-        if (!m_pinnedOpen)
+        if (!fromMouseClick)
         {
-            m_pinnedOpen = true;
-            return;
-        }
-    }
-    else if (!fromMouseClick && m_profileStack.IsEmpty())
-    {
-        // Released trigger at root menu while in center deadzone or gap
-        if (stayOpenOnRelease && !m_pinnedOpen)
-        {
-            m_pinnedOpen = true;
-            return;
+            // Released trigger while in center deadzone or gap
+            if (stayOpenOnRelease && !m_pinnedOpen)
+            {
+                m_pinnedOpen = true;
+                return;
+            }
         }
     }
 
