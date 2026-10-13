@@ -235,19 +235,21 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     Int32 w = GetWidth();
     Int32 h = GetHeight();
 
-    // Background
-    DrawSetPen(Vector(0.12, 0.13, 0.16));
+    // Background (standard window color)
+    DrawSetPen(COLOR_BG);
     DrawRectangle(0, 0, w, h);
 
+    const Vector defaultBg = DrawGetPenColor(COLOR_BG);
+
     // Frame
-    DrawSetPen(Vector(0.22, 0.24, 0.28));
+    DrawSetPen(COLOR_EDGEDK);
     DrawFrame(0, 0, w - 1, h - 1);
 
     PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
     if (!prof)
     {
         DrawSetPen(Vector(0.45, 0.48, 0.52));
-        DrawSetTextCol(Vector(0.55, 0.58, 0.62), Vector(0.12, 0.13, 0.16));
+        DrawSetTextCol(Vector(0.55, 0.58, 0.62), COLOR_TRANS);
         String emptyMsg = "No Pie Menu (Click '+ New' to create one)"_s;
         Int32 tw = DrawGetTextWidth(emptyMsg);
         Int32 th = DrawGetFontHeight();
@@ -310,6 +312,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     const Float baseOuterR = outRVal * invDpi;
     const Float hoverInnerR = ((inRVal > 3.0) ? (inRVal - 3.0) : inRVal) * invDpi;
     const Float hoverOuterR = (outRVal + 13.0) * invDpi; // Pops out by 13px on selection / drag-hover
+    Float opRaw = prof ? prof->opacity : mgr.m_opacity;
+    const Float opVal = (opRaw < 0.1) ? 0.1 : ((opRaw > 1.0) ? 1.0 : opRaw);
 
     Int32 count = prof->slotCount;
     if (count < MIN_SLOT_COUNT) count = MIN_SLOT_COUNT;
@@ -369,7 +373,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else if (!slot.enabled)
         {
-            bgCol = Vector(0.12, 0.12, 0.13); // matches area background (hole)
+            bgCol = defaultBg; // matches area background (hole)
         }
         else if (slot.commandId > 0 || slot.IsSubMenu())
         {
@@ -378,6 +382,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         else
         {
             bgCol = Vector(0.09, 0.10, 0.13);
+        }
+
+        if (slot.enabled && opVal < 0.999)
+        {
+            bgCol = bgCol * opVal + defaultBg * (1.0 - opVal);
         }
 
         drawAnnularSectorPoly(cx, cy, rIn, rOut, aStartIn, aEndIn, aStartOut, aEndOut, bgCol, steps);
@@ -457,6 +466,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             borderWidth = 1.0;
         }
 
+        if (slot.enabled && opVal < 0.999 && !isSelected && !isDragHover && !isDragSource)
+        {
+            borderCol = borderCol * opVal + defaultBg * (1.0 - opVal);
+        }
+
         drawAnnularSectorBorder(cx, cy, rIn, rOut, aStartIn, aEndIn, aStartOut, aEndOut, borderCol, borderWidth, steps);
     }
 
@@ -523,12 +537,31 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             curIconSz = 8.0;
         Int32 sz = (Int32)curIconSz;
 
+        Vector bgCol;
+        if (isDragHover)
+            bgCol = Vector(0.22, 0.24, 0.28) + slot.accentColor * 0.20;
+        else if (isDragSource)
+            bgCol = Vector(0.18, 0.22, 0.30) + slot.accentColor * 0.20;
+        else if (isSelected)
+            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.25;
+        else if (!slot.enabled)
+            bgCol = defaultBg;
+        else if (slot.commandId > 0 || slot.IsSubMenu())
+            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.08;
+        else
+            bgCol = Vector(0.09, 0.10, 0.13);
+
+        Int32 drawflags = BMP_ALLOWALPHA | BMP_TRANSPARENTALPHA | BMP_NORMALSCALED;
+        if (icon.flags & ICONDATAFLAGS::APPLYCOLORPROFILE)
+            drawflags |= BMP_APPLY_COLORPROFILE;
+
         if (dispMode == PieDisplayMode::IconOnly && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
             // Only icon: centered at rMid
             Float ix = cx + std::cos(midRad) * rMid;
             Float iy = cy + std::sin(midRad) * rMid;
-            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+            DrawSetPen(bgCol);
+            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, drawflags);
         }
         else if (dispMode == PieDisplayMode::IconAndLabel && hasIcon && (slot.enabled || isSelected || isDragHover || isDragSource))
         {
@@ -539,7 +572,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
             Float ix = cx + std::cos(midRad) * rIcon;
             Float iy = cy + std::sin(midRad) * rIcon;
-            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+            DrawSetPen(bgCol);
+            DrawBitmap(icon.bmp, (Int32)(ix - sz * 0.5), (Int32)(iy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, drawflags);
 
             Float lx = cx + std::cos(midRad) * rLabel;
             Float ly = cy + std::sin(midRad) * rLabel;
@@ -600,7 +634,7 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (!slot8.enabled)
     {
-        hubBgCol = Vector(0.12, 0.12, 0.13); // matches area background
+        hubBgCol = defaultBg; // matches area background
         hubBorderCol = Vector(0.18, 0.18, 0.20);
         hubBorderWidth = 1.0;
     }
@@ -615,6 +649,15 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         hubBgCol = Vector(0.10, 0.11, 0.14);
         hubBorderCol = Vector(0.32, 0.35, 0.40);
         hubBorderWidth = 1.0;
+    }
+
+    if (slot8.enabled && opVal < 0.999)
+    {
+        hubBgCol = hubBgCol * opVal + defaultBg * (1.0 - opVal);
+    }
+    if (slot8.enabled && opVal < 0.999 && !isSelected8 && !isDragHover8 && !isDragSource8)
+    {
+        hubBorderCol = hubBorderCol * opVal + defaultBg * (1.0 - opVal);
     }
 
     DrawSetPen(hubBgCol);
@@ -636,7 +679,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             if (hubIconSz < 10.0)
                 hubIconSz = 10.0;
             Int32 sz = (Int32)hubIconSz;
-            DrawBitmap(icon.bmp, (Int32)(cx - sz * 0.5), (Int32)(cy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, BMP_ALLOWALPHA);
+
+            Int32 drawflags = BMP_ALLOWALPHA | BMP_TRANSPARENTALPHA | BMP_NORMALSCALED;
+            if (icon.flags & ICONDATAFLAGS::APPLYCOLORPROFILE)
+                drawflags |= BMP_APPLY_COLORPROFILE;
+            DrawSetPen(hubBgCol);
+            DrawBitmap(icon.bmp, (Int32)(cx - sz * 0.5), (Int32)(cy - sz * 0.5), sz, sz, icon.x, icon.y, icon.w, icon.h, drawflags);
         }
         else
         {

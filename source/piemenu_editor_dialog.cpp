@@ -50,6 +50,7 @@ enum
     IDC_GLOBAL_INNER_RADIUS,
     IDC_GLOBAL_DEADZONE,
     IDC_GLOBAL_ICON_SIZE,
+    IDC_GLOBAL_OPACITY,
     IDC_GLOBAL_DISPLAY_MODE,
     IDC_BTN_SAVE,
     IDC_BTN_EXPORT,
@@ -643,70 +644,81 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBegin(0, BFH_SCALEFIT | BFV_SCALEFIT, 1, 0, ""_s, 0);
     GroupSpace(0, 6);
 
-    // 1. Menu selection and management group
-    GroupBegin(IDC_GROUP_MENU_MANAGE, BFH_SCALEFIT, 5, 0, "Menu Management"_s, BORDER_GROUP_IN);
+    // 1. Active Menu Properties & Management unified group
+    GroupBegin(IDC_GROUP_MENU_SETTINGS, BFH_SCALEFIT, 1, 0, "Menu Properties"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
-    GroupSpace(6, 0);
+    GroupSpace(0, 4);
+
+    // Section 1: Active Menu, Context, Name & Title
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(6, 4);
+
+    // Row 1: Active Menu selection and management buttons
     AddStaticText(0, BFH_LEFT, 0, 0, "Active Menu:"_s, 0);
     AddComboBox(IDC_PROFILE_COMBO, BFH_SCALEFIT, 200, 0);
+    GroupBegin(0, BFH_LEFT, 3, 0, ""_s, 0);
+    GroupSpace(6, 0);
     AddButton(IDC_BTN_NEW_PROFILE, BFH_LEFT, 75, 0, "+ New Menu"_s);
     AddButton(IDC_BTN_DUPLICATE_PROFILE, BFH_LEFT, 75, 0, "Duplicate"_s);
     AddButton(IDC_BTN_DELETE_PROFILE, BFH_LEFT, 75, 0, "- Delete"_s);
     GroupEnd();
 
-    // 2. Active Menu Properties group (Name, Context, Slots, Title, Stay Open)
-    GroupBegin(IDC_GROUP_MENU_SETTINGS, BFH_SCALEFIT, 1, 0, "Menu Properties"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(8, 6, 8, 6);
-    GroupSpace(0, 4);
-
-    GroupBegin(0, BFH_SCALEFIT, 6, 0, ""_s, 0);
-    GroupSpace(6, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
-    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 120, 0);
+    // Row 2: Context selection immediately below Active Menu
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
-    AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_LEFT, 140, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Slots (2-24):"_s, 0);
-    AddEditSlider(IDC_SLOTCOUNT_SLIDER, BFH_LEFT, 90, 0);
-    GroupEnd();
+    AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_SCALEFIT, 200, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
 
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
-    GroupSpace(16, 0);
+    // Row 3: Name & Show Title
+    AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
+    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 200, 0);
     AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
-    AddCheckbox(IDC_PROFILE_STAY_OPEN_ON_RELEASE, BFH_LEFT, 0, 0, "Stay Open on Key Release"_s);
-    AddCheckbox(IDC_PROFILE_STAY_OPEN_CENTER, BFH_LEFT, 0, 0, "Stay Open with Center Command"_s);
-    GroupEnd();
 
     GroupEnd();
 
-    // 3. Active Menu Display & Sizing settings group (Sliders)
-    GroupBegin(0, BFH_SCALEFIT, 4, 0, "Menu Display & Sizing"_s, BORDER_GROUP_IN);
-    GroupBorderSpace(8, 6, 8, 6);
+    // Row 4: Slots count slider stretched across full row
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 4);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Slots (2-24):"_s, 0);
+    AddEditSlider(IDC_SLOTCOUNT_SLIDER, BFH_SCALEFIT, 200, 0);
+    GroupEnd();
+
+    // Section 2: Display style, opacity and sizing sliders
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
     GroupSpace(6, 4);
 
+    // Row 5: Display Style and Opacity
+    AddStaticText(0, BFH_LEFT, 0, 0, "Display Style:"_s, 0);
+    AddComboBox(IDC_GLOBAL_DISPLAY_MODE, BFH_SCALEFIT, 110, 0);
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Opacity:"_s, 0);
+    AddEditSlider(IDC_GLOBAL_OPACITY, BFH_SCALEFIT, 110, 0);
+
+    // Row 5: Outer & Inner Radii
     AddStaticText(0, BFH_LEFT, 0, 0, "Outer Radius:"_s, 0);
     AddEditSlider(IDC_GLOBAL_RADIUS, BFH_SCALEFIT, 110, 0);
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Inner Radius:"_s, 0);
     AddEditSlider(IDC_GLOBAL_INNER_RADIUS, BFH_SCALEFIT, 110, 0);
 
+    // Row 6: Deadzone & Icon Size
     AddStaticText(0, BFH_LEFT, 0, 0, "Deadzone:"_s, 0);
     AddEditSlider(IDC_GLOBAL_DEADZONE, BFH_SCALEFIT, 110, 0);
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Icon Size:"_s, 0);
     AddEditSlider(IDC_GLOBAL_ICON_SIZE, BFH_SCALEFIT, 110, 0);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Display Style:"_s, 0);
-    AddComboBox(IDC_GLOBAL_DISPLAY_MODE, BFH_SCALEFIT, 130, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
+    GroupEnd();
 
     GroupEnd();
 
     // 4. Menu Hotkey settings group for the active profile
-    GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 8, 0, "Menu Hotkey (Trigger Shortcut)"_s, BORDER_GROUP_IN);
+    GroupBegin(IDC_GROUP_MENU_HOTKEY, BFH_SCALEFIT, 1, 0, "Menu Hotkey (Trigger Shortcut)"_s, BORDER_GROUP_IN);
     GroupBorderSpace(8, 6, 8, 6);
-    GroupSpace(6, 0);
+    GroupSpace(0, 4);
 
+    // Row 1: Hotkey modifiers and key selection
+    GroupBegin(0, BFH_SCALEFIT, 8, 0, ""_s, 0);
+    GroupSpace(6, 0);
     AddCheckbox(IDC_HOTKEY_CTRL, BFH_LEFT, 0, 0, "Ctrl"_s);
     AddCheckbox(IDC_HOTKEY_SHIFT, BFH_LEFT, 0, 0, "Shift"_s);
     AddCheckbox(IDC_HOTKEY_ALT, BFH_LEFT, 0, 0, "Alt"_s);
@@ -718,6 +730,15 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddButton(IDC_HOTKEY_CLEAR_BTN, BFH_LEFT, 50, 0, "Clear"_s);
 
     AddStaticText(IDC_HOTKEY_PREVIEW_TEXT, BFH_SCALEFIT, 0, 0, ""_s, 0);
+    GroupEnd();
+
+    // Row 2: Behavior on key release
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(16, 0);
+    AddCheckbox(IDC_PROFILE_STAY_OPEN_ON_RELEASE, BFH_LEFT, 0, 0, "Stay Open on Key Release"_s);
+    AddCheckbox(IDC_PROFILE_STAY_OPEN_CENTER, BFH_LEFT, 0, 0, "Stay Open with Center Command"_s);
+    GroupEnd();
+
     GroupEnd();
 
     // UserArea preview (real size)
@@ -1130,6 +1151,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
         SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, false);
         SetBool(IDC_PROFILE_STAY_OPEN_CENTER, false);
         Enable(IDC_PROFILE_STAY_OPEN_CENTER, false);
+        SetPercent(IDC_GLOBAL_OPACITY, 1.0, 10.0, 100.0, 1.0);
+        Enable(IDC_GLOBAL_OPACITY, false);
         return;
     }
 
@@ -1140,11 +1163,13 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, prof->stayOpenOnRelease);
     SetBool(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenWithCenterCommand);
     Enable(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenOnRelease);
+    Enable(IDC_GLOBAL_OPACITY, true);
 
     SetFloat(IDC_GLOBAL_RADIUS, prof->outerRadius, 40.0, 300.0, 1.0);
     SetFloat(IDC_GLOBAL_INNER_RADIUS, prof->innerRadius, 10.0, 200.0, 1.0);
     SetFloat(IDC_GLOBAL_DEADZONE, prof->deadzone, 10.0, 80.0, 1.0);
     SetFloat(IDC_GLOBAL_ICON_SIZE, prof->iconSize, 12.0, 64.0, 1.0);
+    SetPercent(IDC_GLOBAL_OPACITY, (prof->opacity >= 0.05) ? prof->opacity : 1.0, 10.0, 100.0, 1.0);
     SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)prof->displayMode);
 }
 
@@ -1226,6 +1251,15 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
         if (sz > 64.0) sz = 64.0;
         prof->iconSize = sz;
         mgr.m_iconSize = sz;
+    }
+
+    Float op = 1.0;
+    if (GetFloat(IDC_GLOBAL_OPACITY, op))
+    {
+        if (op < 0.1) op = 0.1;
+        if (op > 1.0) op = 1.0;
+        prof->opacity = op;
+        mgr.m_opacity = op;
     }
 
     Int32 dm = 0;
@@ -2063,6 +2097,23 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
             break;
         }
 
+        case IDC_GLOBAL_OPACITY:
+        {
+            Float op = 1.0;
+            if (GetFloat(IDC_GLOBAL_OPACITY, op))
+            {
+                if (op < 0.1) op = 0.1;
+                if (op > 1.0) op = 1.0;
+                Int32 curIdx = m_userArea.GetActiveProfileIndex();
+                PieProfile* prof = mgr.GetProfile(curIdx);
+                if (prof)
+                    prof->opacity = op;
+                mgr.m_opacity = op;
+                m_userArea.Redraw();
+            }
+            break;
+        }
+
         case IDC_GLOBAL_DISPLAY_MODE:
         {
             Int32 mode = 0;
@@ -2184,6 +2235,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 SetFloat(IDC_GLOBAL_INNER_RADIUS, mgr.m_innerRadius);
                 SetFloat(IDC_GLOBAL_DEADZONE, mgr.m_deadzone);
                 SetFloat(IDC_GLOBAL_ICON_SIZE, mgr.m_iconSize);
+                SetPercent(IDC_GLOBAL_OPACITY, mgr.m_opacity, 10.0, 100.0, 1.0);
                 SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)mgr.m_displayMode);
 
                 m_userArea.Redraw();
@@ -2281,6 +2333,7 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_INNER_RADIUS ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_DEADZONE ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_ICON_SIZE ||
+                     msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_OPACITY ||
                      msg.GetInt32(BFM_ACTION_ID) == IDC_GLOBAL_DISPLAY_MODE)
             {
                 PieProfileManager& mgr = PieProfileManager::Get();
@@ -2320,6 +2373,14 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                         if (sz > 64.0) sz = 64.0;
                         prof->iconSize = sz;
                         mgr.m_iconSize = sz;
+                    }
+                    Float op = 1.0;
+                    if (GetFloat(IDC_GLOBAL_OPACITY, op))
+                    {
+                        if (op < 0.1) op = 0.1;
+                        if (op > 1.0) op = 1.0;
+                        prof->opacity = op;
+                        mgr.m_opacity = op;
                     }
                     Int32 dm = 0;
                     if (GetInt32(IDC_GLOBAL_DISPLAY_MODE, dm))

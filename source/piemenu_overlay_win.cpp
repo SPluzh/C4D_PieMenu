@@ -2344,7 +2344,11 @@ void PieMenuOverlay::RenderOverlay()
     POINT ptSrc = { 0, 0 };
     SIZE sizeWnd = { OVERLAY_SIZE, OVERLAY_SIZE };
     POINT ptDst = { m_originScreenX - OVERLAY_SIZE / 2, m_originScreenY - OVERLAY_SIZE / 2 };
-    BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
+    Float opVal = m_activeProfile ? m_activeProfile->opacity : PieProfileManager::Get().m_opacity;
+    if (opVal < 0.1) opVal = 0.1;
+    if (opVal > 1.0) opVal = 1.0;
+    BYTE alphaByte = (BYTE)(Int32)(opVal * 255.0 + 0.5);
+    BLENDFUNCTION blend = { AC_SRC_OVER, 0, alphaByte, AC_SRC_ALPHA };
 
     UpdateLayeredWindow(hwnd, hdcScreen, &ptDst, &sizeWnd, hdcMem, &ptSrc, 0, &blend, ULW_ALPHA);
 

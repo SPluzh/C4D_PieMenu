@@ -18,6 +18,7 @@ static const Int32 PIE_CONFIG_MAGIC_V8 = 0x50494538; // "PIE8"
 static const Int32 PIE_CONFIG_MAGIC_V9 = 0x50494539; // "PIE9"
 static const Int32 PIE_CONFIG_MAGIC_V10 = 0x5049453A; // "PIE:"
 static const Int32 PIE_CONFIG_MAGIC_V11 = 0x5049453B; // "PIE;"
+static const Int32 PIE_CONFIG_MAGIC_V12 = 0x5049453C; // "PIE<"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -334,6 +335,7 @@ void PieProfileManager::InitDefaults()
     m_radius = 112.0;
     m_deadzone = 26.0;
     m_iconSize = 24.0;
+    m_opacity = 1.0;
     m_displayMode = PieDisplayMode::IconAndLabel;
     m_stayOpenOnRelease = false;
     m_stayOpenWithCenterCommand = false;
@@ -416,6 +418,7 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     j.Set("radius", (double)prof.outerRadius);
     j.Set("deadzone", (double)prof.deadzone);
     j.Set("iconSize", (double)prof.iconSize);
+    j.Set("opacity", (double)prof.opacity);
     j.Set("displayMode", (int64_t)prof.displayMode);
     j.Set("stayOpenOnRelease", (bool)prof.stayOpenOnRelease);
     j.Set("stayOpenWithCenterCommand", (bool)prof.stayOpenWithCenterCommand);
@@ -552,6 +555,8 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     outProf.radius = outProf.outerRadius;
     outProf.deadzone = (Float)jProf.GetNumber("deadzone", 26.0);
     outProf.iconSize = (Float)jProf.GetNumber("iconSize", 24.0);
+    outProf.opacity = (Float)jProf.GetNumber("opacity", 1.0);
+    if (outProf.opacity < 0.1 || outProf.opacity > 1.0) outProf.opacity = 1.0;
     outProf.displayMode = (PieDisplayMode)(int)jProf.GetInt("displayMode", 0);
     outProf.stayOpenOnRelease = jProf.GetBool("stayOpenOnRelease", false);
     outProf.stayOpenWithCenterCommand = jProf.GetBool("stayOpenWithCenterCommand", false);
@@ -626,7 +631,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     return true;
 }
 
-static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfile>& outProfiles, Float& outOuterRadius, Float& outInnerRadius, Float& outRadius, Float& outDeadzone, Float& outIconSize, PieDisplayMode& outDisplayMode, Bool& outStayOpenOnRelease, Bool& outStayOpenWithCenterCommand, Bool& outUseCtrlShift, Int32& outTriggerKey)
+static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfile>& outProfiles, Float& outOuterRadius, Float& outInnerRadius, Float& outRadius, Float& outDeadzone, Float& outIconSize, PieDisplayMode& outDisplayMode, Bool& outStayOpenOnRelease, Bool& outStayOpenWithCenterCommand, Float& outOpacity, Bool& outUseCtrlShift, Int32& outTriggerKey)
 {
     if (!file)
         return false;
@@ -638,7 +643,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V11)
+    if (firstVal == PIE_CONFIG_MAGIC_V12)
+    {
+        version = 12;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V11)
     {
         version = 11;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -878,6 +889,17 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.stayOpenWithCenterCommand = false;
         }
 
+        if (version >= 12)
+        {
+            file->ReadFloat64(&prof.opacity);
+            if (prof.opacity < 0.1 || prof.opacity > 1.0)
+                prof.opacity = 1.0;
+        }
+        else
+        {
+            prof.opacity = 1.0;
+        }
+
         outProfiles.Append(prof) iferr_ignore("Append");
     }
 
@@ -934,6 +956,25 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
         outStayOpenWithCenterCommand = false;
     }
 
+    if (version >= 12)
+    {
+        file->ReadFloat64(&outOpacity);
+        if (outOpacity < 0.1 || outOpacity > 1.0)
+            outOpacity = 1.0;
+    }
+    else
+    {
+        outOpacity = 1.0;
+    }
+
+    if (version < 12)
+    {
+        for (Int32 p = 0; p < (Int32)outProfiles.GetCount(); ++p)
+        {
+            outProfiles[p].opacity = outOpacity;
+        }
+    }
+
     // For files prior to V6, populate each profile with the global radius and deadzone
     if (version < 6)
     {
@@ -970,7 +1011,7 @@ Bool PieProfileManager::LoadFromFile()
         return false;
     }
 
-    if (!ReadProfilesFromBinaryFile(file, m_profiles, m_outerRadius, m_innerRadius, m_radius, m_deadzone, m_iconSize, m_displayMode, m_stayOpenOnRelease, m_stayOpenWithCenterCommand, m_useCtrlShift, m_triggerKey))
+    if (!ReadProfilesFromBinaryFile(file, m_profiles, m_outerRadius, m_innerRadius, m_radius, m_deadzone, m_iconSize, m_displayMode, m_stayOpenOnRelease, m_stayOpenWithCenterCommand, m_opacity, m_useCtrlShift, m_triggerKey))
     {
         if (m_profiles.IsEmpty())
             InitDefaults();
@@ -1000,6 +1041,7 @@ Bool PieProfileManager::ExportSettingsToFile(const Filename& path, Int32 singleP
         jSettings.Set("radius", m_outerRadius);
         jSettings.Set("deadzone", m_deadzone);
         jSettings.Set("iconSize", m_iconSize);
+        jSettings.Set("opacity", m_opacity);
         jSettings.Set("displayMode", (int64_t)m_displayMode);
         jSettings.Set("stayOpenOnRelease", (bool)m_stayOpenOnRelease);
         jSettings.Set("stayOpenWithCenterCommand", (bool)m_stayOpenWithCenterCommand);
@@ -1043,7 +1085,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1052,12 +1094,13 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
             Float tempRadius = 112.0;
             Float tempDeadzone = 26.0;
             Float tempIconSize = 24.0;
+            Float tempOpacity = 1.0;
             PieDisplayMode tempDisplayMode = PieDisplayMode::IconAndLabel;
             Bool tempStayOpenOnRelease = false;
             Bool tempStayOpenWithCenterCommand = false;
             Bool tempCtrlShift = false;
             Int32 tempTrigger = 'V';
-            if (ReadProfilesFromBinaryFile(file, tempProfiles, tempOuterRadius, tempInnerRadius, tempRadius, tempDeadzone, tempIconSize, tempDisplayMode, tempStayOpenOnRelease, tempStayOpenWithCenterCommand, tempCtrlShift, tempTrigger))
+            if (ReadProfilesFromBinaryFile(file, tempProfiles, tempOuterRadius, tempInnerRadius, tempRadius, tempDeadzone, tempIconSize, tempDisplayMode, tempStayOpenOnRelease, tempStayOpenWithCenterCommand, tempOpacity, tempCtrlShift, tempTrigger))
             {
                 outProfileCount = (Int32)tempProfiles.GetCount();
                 if (outProfileCount > 0)
@@ -1134,6 +1177,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Float parsedInnerRadius = m_innerRadius;
     Float parsedDeadzone = m_deadzone;
     Float parsedIconSize = m_iconSize;
+    Float parsedOpacity = m_opacity;
     PieDisplayMode parsedDisplayMode = m_displayMode;
     Bool parsedStayOpenOnRelease = m_stayOpenOnRelease;
     Bool parsedStayOpenWithCenter = m_stayOpenWithCenterCommand;
@@ -1143,13 +1187,13 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Float dummyRadius = m_radius;
             Bool dummyCtrlShift = false;
             Int32 dummyTrigger = 'V';
-            if (ReadProfilesFromBinaryFile(file, parsedProfiles, parsedOuterRadius, parsedInnerRadius, dummyRadius, parsedDeadzone, parsedIconSize, parsedDisplayMode, parsedStayOpenOnRelease, parsedStayOpenWithCenter, dummyCtrlShift, dummyTrigger))
+            if (ReadProfilesFromBinaryFile(file, parsedProfiles, parsedOuterRadius, parsedInnerRadius, dummyRadius, parsedDeadzone, parsedIconSize, parsedDisplayMode, parsedStayOpenOnRelease, parsedStayOpenWithCenter, parsedOpacity, dummyCtrlShift, dummyTrigger))
             {
                 hasParsedSettings = true;
             }
@@ -1196,6 +1240,8 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
                 }
                 parsedDeadzone = (Float)jSettings->GetNumber("deadzone", (double)m_deadzone);
                 parsedIconSize = (Float)jSettings->GetNumber("iconSize", (double)m_iconSize);
+                parsedOpacity = (Float)jSettings->GetNumber("opacity", (double)m_opacity);
+                if (parsedOpacity < 0.1 || parsedOpacity > 1.0) parsedOpacity = 1.0;
                 parsedDisplayMode = (PieDisplayMode)jSettings->GetInt("displayMode", (int64_t)m_displayMode);
                 parsedStayOpenOnRelease = jSettings->GetBool("stayOpenOnRelease", m_stayOpenOnRelease);
                 parsedStayOpenWithCenter = jSettings->GetBool("stayOpenWithCenterCommand", m_stayOpenWithCenterCommand);
@@ -1274,6 +1320,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
             m_radius = parsedOuterRadius;
             m_deadzone = parsedDeadzone;
             m_iconSize = parsedIconSize;
+            m_opacity = parsedOpacity;
             m_displayMode = parsedDisplayMode;
             m_stayOpenOnRelease = parsedStayOpenOnRelease;
             m_stayOpenWithCenterCommand = parsedStayOpenWithCenter;
@@ -1310,8 +1357,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V11 header to denote stay open with center command support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V11);
+    // Write magic V12 header to denote opacity support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V12);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1350,6 +1397,7 @@ Bool PieProfileManager::SaveToFile()
         file->WriteInt32((Int32)prof.displayMode);
         file->WriteBool(prof.stayOpenOnRelease);
         file->WriteBool(prof.stayOpenWithCenterCommand);
+        file->WriteFloat64(prof.opacity);
     }
 
     file->WriteBool(m_useCtrlShift);
@@ -1361,6 +1409,7 @@ Bool PieProfileManager::SaveToFile()
     file->WriteInt32((Int32)m_displayMode);
     file->WriteBool(m_stayOpenOnRelease);
     file->WriteBool(m_stayOpenWithCenterCommand);
+    file->WriteFloat64(m_opacity);
 
     file->Close();
     return true;
@@ -1470,6 +1519,7 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
     p.radius = m_outerRadius;
     p.deadzone = m_deadzone;
     p.iconSize = m_iconSize;
+    p.opacity = m_opacity;
     p.displayMode = m_displayMode;
     p.stayOpenOnRelease = m_stayOpenOnRelease;
     p.stayOpenWithCenterCommand = m_stayOpenWithCenterCommand;

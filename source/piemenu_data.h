@@ -105,6 +105,7 @@ struct PieProfile
     Float          radius = 112.0;
     Float          deadzone = 26.0;
     Float          iconSize = 24.0;
+    Float          opacity = 1.0;
     PieDisplayMode displayMode = PieDisplayMode::IconAndLabel;
     Bool           stayOpenOnRelease = false;
     Bool           stayOpenWithCenterCommand = false;
@@ -157,6 +158,7 @@ public:
     Float m_radius = 112.0;
     Float m_deadzone = 26.0;
     Float m_iconSize = 24.0;
+    Float m_opacity = 1.0;
     PieDisplayMode m_displayMode = PieDisplayMode::IconAndLabel;
     Bool           m_stayOpenOnRelease = false;
     Bool           m_stayOpenWithCenterCommand = false;
