@@ -22,6 +22,7 @@ enum
     IDC_GROUP_MENU_SETTINGS,
     IDC_PROFILE_NAME_EDIT,
     IDC_PROFILE_CONTEXT_COMBO,
+    IDC_SLOTCOUNT_NUMBER,
     IDC_SLOTCOUNT_SLIDER,
     IDC_PROFILE_SHOW_TITLE,
     IDC_PROFILE_STAY_OPEN_ON_RELEASE,
@@ -649,37 +650,43 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBorderSpace(8, 6, 8, 6);
     GroupSpace(0, 4);
 
-    // Section 1: Active Menu, Context, Name & Title
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    // Section 1: Active Menu, Context, Slots, Name & Title
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
     GroupSpace(6, 4);
 
     // Row 1: Active Menu selection and management buttons
     AddStaticText(0, BFH_LEFT, 0, 0, "Active Menu:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
     AddComboBox(IDC_PROFILE_COMBO, BFH_SCALEFIT, 200, 0);
-    GroupBegin(0, BFH_LEFT, 3, 0, ""_s, 0);
+    GroupBegin(0, BFH_RIGHT, 3, 0, ""_s, 0);
     GroupSpace(6, 0);
     AddButton(IDC_BTN_NEW_PROFILE, BFH_LEFT, 75, 0, "+ New Menu"_s);
     AddButton(IDC_BTN_DUPLICATE_PROFILE, BFH_LEFT, 75, 0, "Duplicate"_s);
     AddButton(IDC_BTN_DELETE_PROFILE, BFH_LEFT, 75, 0, "- Delete"_s);
     GroupEnd();
+    GroupEnd();
 
     // Row 2: Context selection immediately below Active Menu
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
     AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_SCALEFIT, 200, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
 
     // Row 3: Name & Show Title
     AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
     AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 200, 0);
-    AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Menu Title"_s);
-
+    AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_RIGHT, 0, 0, "Show Menu Title"_s);
     GroupEnd();
 
-    // Row 4: Slots count slider stretched across full row
-    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
-    GroupSpace(6, 4);
+    // Row 4: Slots count compact number box + stretched slider
     AddStaticText(0, BFH_LEFT, 0, 0, "Slots (2-24):"_s, 0);
-    AddEditSlider(IDC_SLOTCOUNT_SLIDER, BFH_SCALEFIT, 200, 0);
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
+    AddEditNumber(IDC_SLOTCOUNT_NUMBER, BFH_LEFT, 50, 0);
+    AddSlider(IDC_SLOTCOUNT_SLIDER, BFH_SCALEFIT, 0, 0);
+    GroupEnd();
+
     GroupEnd();
 
     // Section 2: Display style, opacity and sizing sliders
@@ -1146,6 +1153,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     {
         SetString(IDC_PROFILE_NAME_EDIT, ""_s);
         SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Global);
+        SetInt32(IDC_SLOTCOUNT_NUMBER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetInt32(IDC_SLOTCOUNT_SLIDER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetBool(IDC_PROFILE_SHOW_TITLE, true);
         SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, false);
@@ -1158,6 +1166,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
 
     SetString(IDC_PROFILE_NAME_EDIT, prof->name);
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
+    SetInt32(IDC_SLOTCOUNT_NUMBER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
     SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, prof->stayOpenOnRelease);
@@ -1190,7 +1199,7 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
         prof->context = (PieContextMode)ctx;
 
     Int32 sc = 8;
-    if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
+    if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc) || GetInt32(IDC_SLOTCOUNT_NUMBER, sc))
     {
         if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
         if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
@@ -1458,6 +1467,7 @@ void PieMenuEditorDialog::UpdateInspector()
         return;
     }
 
+    SetInt32(IDC_SLOTCOUNT_NUMBER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
 
     Int32 sel = m_userArea.GetSelectedSlot();
@@ -1745,15 +1755,18 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         }
 
         case IDC_SLOTCOUNT_SLIDER:
+        case IDC_SLOTCOUNT_NUMBER:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
             if (prof)
             {
                 Int32 sc = 8;
-                if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
+                if (id == IDC_SLOTCOUNT_SLIDER ? GetInt32(IDC_SLOTCOUNT_SLIDER, sc) : GetInt32(IDC_SLOTCOUNT_NUMBER, sc))
                 {
                     if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
                     if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+                    SetInt32(IDC_SLOTCOUNT_SLIDER, sc, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
+                    SetInt32(IDC_SLOTCOUNT_NUMBER, sc, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
                     if (prof->slotCount != sc)
                     {
                         prof->slotCount = sc;
@@ -2305,17 +2318,20 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                     }
                 }
             }
-            else if (msg.GetInt32(BFM_ACTION_ID) == IDC_SLOTCOUNT_SLIDER)
+            else if (msg.GetInt32(BFM_ACTION_ID) == IDC_SLOTCOUNT_SLIDER || msg.GetInt32(BFM_ACTION_ID) == IDC_SLOTCOUNT_NUMBER)
             {
                 PieProfileManager& mgr = PieProfileManager::Get();
                 PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
                 if (prof)
                 {
+                    Int32 actionId = msg.GetInt32(BFM_ACTION_ID);
                     Int32 sc = 8;
-                    if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc))
+                    if (actionId == IDC_SLOTCOUNT_SLIDER ? GetInt32(IDC_SLOTCOUNT_SLIDER, sc) : GetInt32(IDC_SLOTCOUNT_NUMBER, sc))
                     {
                         if (sc < MIN_SLOT_COUNT) sc = MIN_SLOT_COUNT;
                         if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
+                        SetInt32(IDC_SLOTCOUNT_SLIDER, sc, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
+                        SetInt32(IDC_SLOTCOUNT_NUMBER, sc, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
                         if (prof->slotCount != sc)
                         {
                             prof->slotCount = sc;

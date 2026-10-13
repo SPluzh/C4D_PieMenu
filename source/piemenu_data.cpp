@@ -1061,10 +1061,10 @@ Bool PieProfileManager::ExportSettingsToFile(const Filename& path, Int32 singleP
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    Int64 written = file->WriteBytes(jsonStr.data(), (Int)jsonStr.size());
+    Bool success = file->WriteBytes(jsonStr.data(), (Int)jsonStr.size());
     file->Close();
 
-    return (written == (Int64)jsonStr.size());
+    return success;
 }
 
 Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfileCount, maxon::String& outFirstName, Bool& outHasGlobalSettings) const

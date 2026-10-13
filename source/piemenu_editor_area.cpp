@@ -530,7 +530,8 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         Bool isVisible = (slot.enabled || isSelected || isDragHover || isDragSource || slot.commandId > 0 || slot.IsSubMenu());
 
-        Float curIconSz = (isSelectedOrHovered ? (baseIconSz * 1.15) : baseIconSz) * invDpi;
+        Float hoverScale = (dispMode == PieDisplayMode::IconAndLabel) ? 1.1 : 1.15;
+        Float curIconSz = (isSelectedOrHovered ? (baseIconSz * hoverScale) : baseIconSz) * invDpi;
         if (curIconSz > (rOut - rIn) * 0.85)
             curIconSz = (rOut - rIn) * 0.85;
         if (curIconSz < 8.0)
@@ -673,11 +674,10 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
 
         if (hasIcon8)
         {
-            Float hubIconSz = (isSelected8 || isDragHover8 || isDragSource8 ? (baseIconSz * 1.1) : baseIconSz) * (deadzoneRadius / 26.0);
-            if (hubIconSz > deadzoneRadius * 1.6)
-                hubIconSz = deadzoneRadius * 1.6;
-            if (hubIconSz < 10.0)
-                hubIconSz = 10.0;
+            Float hoverScale = (dispMode == PieDisplayMode::IconAndLabel) ? 1.1 : 1.15;
+            Float hubIconSz = (isSelected8 || isDragHover8 || isDragSource8 ? (baseIconSz * hoverScale) : baseIconSz) * invDpi;
+            if (hubIconSz < 8.0)
+                hubIconSz = 8.0;
             Int32 sz = (Int32)hubIconSz;
 
             Int32 drawflags = BMP_ALLOWALPHA | BMP_TRANSPARENTALPHA | BMP_NORMALSCALED;

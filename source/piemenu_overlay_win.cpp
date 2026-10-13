@@ -2202,10 +2202,10 @@ void PieMenuOverlay::RenderOverlay()
 
         if (centerConfigured && pIconBmp8 != nullptr)
         {
-            float hubBaseSz = baseIconSz;
-            float hubIconSz = (centerHovered ? (hubBaseSz * 1.1f) : hubBaseSz) * (deadzoneRadius / 26.0f);
-            if (hubIconSz > deadzoneRadius * 1.6f)
-                hubIconSz = deadzoneRadius * 1.6f;
+            float hoverScale = (dispMode == PieDisplayMode::IconAndLabel) ? 1.1f : 1.15f;
+            float hubIconSz = centerHovered ? (baseIconSz * hoverScale) : baseIconSz;
+            if (hubIconSz < 8.0f)
+                hubIconSz = 8.0f;
 
             if (centerHovered)
             {
