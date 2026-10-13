@@ -1,4 +1,4 @@
-# C4D_PieMenu — Radial Marking Menu & Profile Editor for Cinema 4D
+# C4D_PieMenu - Radial Marking Menu & Profile Editor for Cinema 4D
 
 ![](attachments/C4D_PieMenu.gif)
 
