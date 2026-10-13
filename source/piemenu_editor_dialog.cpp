@@ -669,7 +669,16 @@ Bool PieMenuEditorDialog::CreateLayout()
 
     // Row 2: Context selection immediately below Active Menu
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
     AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_SCALEFIT, 200, 0);
+    GroupBegin(0, BFH_RIGHT, 3, 0, ""_s, 0);
+    GroupSpace(6, 0);
+    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
+    GroupEnd();
+    GroupEnd();
 
     // Row 3: Name & Show Title
     AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
