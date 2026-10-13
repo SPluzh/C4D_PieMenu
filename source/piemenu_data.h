@@ -61,16 +61,18 @@ enum class PieDisplayMode
 enum class PieContextMode
 {
     Global = 0,
-    Polygons,
-    Edges,
-    Points,
-    Objects,
-    UV
+    Polygons = 1,
+    Edges = 2,
+    Points = 3,
+    Objects = 4,
+    UV = 5,
+    Components = 6
 };
 
 maxon::String GetContextName(PieContextMode ctx);
 maxon::String GetContextShortName(PieContextMode ctx);
 PieContextMode GetContextModeForDoc(BaseDocument* doc);
+Bool IsComponentContext(PieContextMode ctx);
 
 struct PieHotkey
 {

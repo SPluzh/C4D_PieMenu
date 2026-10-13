@@ -1064,6 +1064,7 @@ Bool PieMenuEditorDialog::InitValues()
     // Populate context combo
     FreeChildren(IDC_PROFILE_CONTEXT_COMBO);
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Global, GetContextName(PieContextMode::Global));
+    AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Components, GetContextName(PieContextMode::Components));
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Polygons, GetContextName(PieContextMode::Polygons));
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Edges, GetContextName(PieContextMode::Edges));
     AddChild(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Points, GetContextName(PieContextMode::Points));

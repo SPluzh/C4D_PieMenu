@@ -40,6 +40,7 @@
 - **Create Unlimited Menus & Submenus**: Add as many custom pie menus as you need using the **`+ New Menu`**, **`Duplicate`**, and **`- Delete`** buttons. Menus can be used standalone or linked as submenus in other menus.
 - **Context-Sensitive Triggering**:
   - **Global**: Accessible across all modes and tools.
+  - **Components Mode**: Active when working in any component mode (Points, Edges, Polygons).
   - **Polygons Mode**: Active when working in polygon component mode.
   - **Edges Mode**: Active when working in edge component mode.
   - **Points Mode**: Active when working in point component mode.

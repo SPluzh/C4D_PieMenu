@@ -23,12 +23,13 @@ maxon::String GetContextName(PieContextMode ctx)
 {
     switch (ctx)
     {
-        case PieContextMode::Global:   return "Global (All Modes)"_s;
-        case PieContextMode::Polygons: return "Polygons Mode"_s;
-        case PieContextMode::Edges:    return "Edges Mode"_s;
-        case PieContextMode::Points:   return "Points Mode"_s;
-        case PieContextMode::Objects:  return "Objects / Model Mode"_s;
-        case PieContextMode::UV:       return "UV Edit Mode"_s;
+        case PieContextMode::Global:     return "Global (All Modes)"_s;
+        case PieContextMode::Components: return "Components (Points, Edges, Polygons)"_s;
+        case PieContextMode::Polygons:   return "Polygons Mode"_s;
+        case PieContextMode::Edges:      return "Edges Mode"_s;
+        case PieContextMode::Points:     return "Points Mode"_s;
+        case PieContextMode::Objects:    return "Objects / Model Mode"_s;
+        case PieContextMode::UV:         return "UV Edit Mode"_s;
         default: return "Global"_s;
     }
 }
@@ -37,14 +38,20 @@ maxon::String GetContextShortName(PieContextMode ctx)
 {
     switch (ctx)
     {
-        case PieContextMode::Global:   return "Global"_s;
-        case PieContextMode::Polygons: return "Polygons"_s;
-        case PieContextMode::Edges:    return "Edges"_s;
-        case PieContextMode::Points:   return "Points"_s;
-        case PieContextMode::Objects:  return "Objects"_s;
-        case PieContextMode::UV:       return "UV"_s;
+        case PieContextMode::Global:     return "Global"_s;
+        case PieContextMode::Components: return "Components"_s;
+        case PieContextMode::Polygons:   return "Polygons"_s;
+        case PieContextMode::Edges:      return "Edges"_s;
+        case PieContextMode::Points:     return "Points"_s;
+        case PieContextMode::Objects:    return "Objects"_s;
+        case PieContextMode::UV:         return "UV"_s;
         default: return "Global"_s;
     }
+}
+
+Bool IsComponentContext(PieContextMode ctx)
+{
+    return (ctx == PieContextMode::Points || ctx == PieContextMode::Edges || ctx == PieContextMode::Polygons);
 }
 
 PieContextMode GetContextModeForDoc(BaseDocument* doc)
@@ -506,7 +513,8 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     outProf.name = StdStringToC4DString(nameStr);
 
     std::string ctxStr = jProf.GetString("context", "Global");
-    if (ctxStr == "Polygons") outProf.context = PieContextMode::Polygons;
+    if (ctxStr == "Components") outProf.context = PieContextMode::Components;
+    else if (ctxStr == "Polygons") outProf.context = PieContextMode::Polygons;
     else if (ctxStr == "Edges") outProf.context = PieContextMode::Edges;
     else if (ctxStr == "Points") outProf.context = PieContextMode::Points;
     else if (ctxStr == "Objects") outProf.context = PieContextMode::Objects;
@@ -1408,7 +1416,17 @@ Int32 PieProfileManager::GetActiveProfileIndex(BaseDocument* doc)
         }
     }
 
-    // 2. Fallback to Global context profile
+    // 2. Try Components context match if doc is in component mode
+    if (IsComponentContext(desired))
+    {
+        for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
+        {
+            if (m_profiles[i].context == PieContextMode::Components)
+                return i;
+        }
+    }
+
+    // 3. Fallback to Global context profile
     for (Int32 i = 0; i < (Int32)m_profiles.GetCount(); ++i)
     {
         if (m_profiles[i].context == PieContextMode::Global)
@@ -1565,16 +1583,22 @@ Int32 PieProfileManager::FindTriggeredProfileIndex(BaseDocument* doc) const
         }
     }
 
-    // 2. Search for Global context match
+    // 2. Search for Components context match if doc is in component mode
+    if (IsComponentContext(desired))
+    {
+        for (Int32 idx : matched)
+        {
+            if (m_profiles[idx].context == PieContextMode::Components)
+                return idx;
+        }
+    }
+
+    // 3. Search for Global context match
     for (Int32 idx : matched)
     {
         if (m_profiles[idx].context == PieContextMode::Global)
             return idx;
     }
-
-    // 3. Unique hotkey match: if only one profile matched the pressed shortcut, trigger it regardless of mode
-    if (matched.GetCount() == 1)
-        return matched[0];
 
     // If all matched profiles have specific contexts that do NOT match the current mode, do not trigger
     return NOTOK;

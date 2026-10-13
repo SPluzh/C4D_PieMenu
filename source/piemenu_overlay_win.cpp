@@ -1448,7 +1448,20 @@ void PieMenuOverlay::CheckTrigger()
                 }
             }
 
-            // 2. Global context fallback
+            // 2. Components context match (Points, Edges, Polygons)
+            if (!triggered && IsComponentContext(desired))
+            {
+                for (PieProfile* p : matched)
+                {
+                    if (p->context == PieContextMode::Components)
+                    {
+                        triggered = p;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Global context fallback
             if (!triggered)
             {
                 for (PieProfile* p : matched)
@@ -1459,11 +1472,6 @@ void PieMenuOverlay::CheckTrigger()
                         break;
                     }
                 }
-            }
-            // 3. Unique hotkey match: if only one profile matched the pressed shortcut, trigger it regardless of mode
-            if (!triggered && matched.GetCount() == 1)
-            {
-                triggered = matched[0];
             }
         }
 
