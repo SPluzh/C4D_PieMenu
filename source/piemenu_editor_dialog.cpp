@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <functional>
 #include <unordered_set>
+#include <unordered_map>
+#include <vector>
 
 namespace cinema
 {
@@ -309,8 +311,12 @@ Int32 CommandListTreeView::GetColumnWidth(void* root, void* userdata, void* obj,
 {
     if (col == 'icon')
         return 24;
+    if (col == 'tree')
+        return 150;
     if (col == 'cmdi')
         return 65;
+    if (col == 'scut')
+        return LV_COLUMN_WIDTH_FIT;
     return LV_COLUMN_WIDTH_FIT;
 }
 
@@ -318,8 +324,12 @@ Int32 CommandListTreeView::GetHeaderColumnWidth(void* root, void* userdata, Int3
 {
     if (col == 'icon')
         return 24;
+    if (col == 'tree')
+        return 150;
     if (col == 'cmdi')
         return 65;
+    if (col == 'scut')
+        return LV_COLUMN_WIDTH_FIT;
     return LV_COLUMN_WIDTH_FIT;
 }
 
@@ -347,6 +357,16 @@ void CommandListTreeView::DrawCell(void* root, void* userdata, void* obj, Int32 
             drawinfo->frame->DrawBitmap(item->icon.bmp, ix, iy, sz, sz,
                 item->icon.x, item->icon.y, item->icon.w, item->icon.h,
                 drawflags);
+        }
+    }
+    else if (col == 'scut')
+    {
+        if (item->shortcut.IsPopulated())
+        {
+            drawinfo->frame->DrawSetTextCol(Vector(0.72, 0.74, 0.78), COLOR_TRANS);
+            Int32 th = drawinfo->frame->DrawGetFontHeight();
+            Int32 ty = drawinfo->ypos + (drawinfo->height - th) / 2;
+            drawinfo->frame->DrawText(item->shortcut, drawinfo->xpos + 4, ty);
         }
     }
     else if (col == 'cmdi')
@@ -844,6 +864,42 @@ void PieMenuEditorDialog::PopulateAllCommands()
 
     std::unordered_set<Int32> seen;
 
+    // 0. Pre-cache all shortcut mappings from Cinema 4D
+    std::unordered_map<Int32, String> shortcutMap;
+    const Int32 scCount = GetShortcutCount();
+    for (Int32 i = 0; i < scCount; ++i)
+    {
+        BaseContainer sc = GetShortcut(i);
+        Int32 cmdId = sc.GetInt32(SHORTCUT_PLUGINID);
+        if (cmdId <= 0)
+            continue;
+
+        String scStr = Shortcut2String(sc);
+        if (!scStr.IsPopulated())
+            continue;
+
+        auto it = shortcutMap.find(cmdId);
+        if (it == shortcutMap.end())
+        {
+            shortcutMap[cmdId] = scStr;
+        }
+        else
+        {
+            if (!it->second.Find(scStr, nullptr))
+            {
+                it->second += ", "_s;
+                it->second += scStr;
+            }
+        }
+    }
+
+    auto assignShortcut = [&](CommandItem& item)
+    {
+        auto it = shortcutMap.find(item.id);
+        if (it != shortcutMap.end())
+            item.shortcut = it->second;
+    };
+
     // 1. Collect CommandData plugins
     AutoAlloc<AtomArray> cmdArray;
     if (cmdArray && FilterPluginList(*cmdArray, PLUGINTYPE::COMMAND, true))
@@ -870,6 +926,7 @@ void PieMenuEditorDialog::PopulateAllCommands()
             CommandItem item;
             item.id = id;
             item.name = name;
+            assignShortcut(item);
             item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
             m_allCommands.Append(item) iferr_ignore("Append");
         }
@@ -901,6 +958,7 @@ void PieMenuEditorDialog::PopulateAllCommands()
             CommandItem item;
             item.id = id;
             item.name = name;
+            assignShortcut(item);
             item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
             m_allCommands.Append(item) iferr_ignore("Append");
         }
@@ -926,6 +984,7 @@ void PieMenuEditorDialog::PopulateAllCommands()
                         CommandItem item;
                         item.id = id;
                         item.name = name;
+                        assignShortcut(item);
                         item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
                         m_allCommands.Append(item) iferr_ignore("Append");
                     }
@@ -937,11 +996,160 @@ void PieMenuEditorDialog::PopulateAllCommands()
     };
     recurse(GetFirstPlugin());
 
+    // 4. Ensure any active commands with shortcuts are included
+    for (const auto& pair : shortcutMap)
+    {
+        Int32 id = pair.first;
+        if (id > 0 && seen.find(id) == seen.end())
+        {
+            String name = GetCommandName(id);
+            if (name.IsPopulated())
+            {
+                seen.insert(id);
+                CommandItem item;
+                item.id = id;
+                item.name = name;
+                item.shortcut = pair.second;
+                item.hasIcon = GetIcon(id, &item.icon) && (item.icon.bmp != nullptr);
+                m_allCommands.Append(item) iferr_ignore("Append");
+            }
+        }
+    }
+
     // Sort alphabetically by name
     std::sort(m_allCommands.Begin(), m_allCommands.End(), [](const CommandItem& a, const CommandItem& b)
     {
         return a.name.Compare(b.name, maxon::STRINGCOMPARISON::CASEINSENSITIVE_NUMBERS) == maxon::COMPARERESULT::LESS;
     });
+}
+
+static wchar_t MapRuCharToEn(wchar_t ch)
+{
+    // Russian lowercase 'а' (0x0430) to 'я' (0x044F) mapped to QWERTY
+    static const wchar_t s_ruMap[] = {
+        L'f', L',', L'd', L'u', L'l', L't', L';', L'p', // а, б, в, г, д, е, ж, з
+        L'b', L'q', L'r', L'k', L'v', L'y', L'j', L'g', // и, й, к, л, м, н, о, п
+        L'h', L'c', L'n', L'e', L'a', L'[', L'w', L'x', // р, с, т, у, ф, х, ц, ч
+        L'i', L'o', L']', L's', L'm', L'\'', L'.', L'z'  // ш, щ, ъ, ы, ь, э, ю, я
+    };
+    if (ch >= 0x0430 && ch <= 0x044F)
+        return s_ruMap[ch - 0x0430];
+    if (ch == 0x0451) // ё
+        return L'`';
+    return ch;
+}
+
+static String ConvertRuToEnLayout(const String& str)
+{
+    Char* cstr = str.GetCStringCopy(STRINGENCODING::UTF8);
+    if (!cstr) return String();
+    int req = MultiByteToWideChar(CP_UTF8, 0, cstr, -1, nullptr, 0);
+    if (req <= 1) { DeleteMem(cstr); return String(); }
+    std::vector<wchar_t> wbuf(req);
+    MultiByteToWideChar(CP_UTF8, 0, cstr, -1, wbuf.data(), req);
+    DeleteMem(cstr);
+
+    bool changed = false;
+    for (size_t i = 0; i < wbuf.size(); ++i)
+    {
+        wchar_t mapped = MapRuCharToEn(wbuf[i]);
+        if (mapped != wbuf[i])
+        {
+            wbuf[i] = mapped;
+            changed = true;
+        }
+    }
+    if (!changed)
+        return String();
+
+    int reqMb = WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), -1, nullptr, 0, nullptr, nullptr);
+    if (reqMb <= 1) return String();
+    std::vector<char> mbbuf(reqMb);
+    WideCharToMultiByte(CP_UTF8, 0, wbuf.data(), -1, mbbuf.data(), reqMb, nullptr, nullptr);
+    return String(mbbuf.data());
+}
+
+static Bool ShortcutMatchesQuery(const String& shortcutStr, const String& q, const String& qAlt)
+{
+    if (shortcutStr.IsEmpty() || q.IsEmpty())
+        return false;
+
+    auto testQuery = [&](const String& query) -> Bool
+    {
+        if (query.IsEmpty())
+            return false;
+
+        String qLow = query.ToLower();
+        String scLow = shortcutStr.ToLower();
+
+        // Check if query specifies a modifier or chord sequence
+        Bool isModifierQuery = (qLow.Find("ctrl"_s, nullptr) ||
+                                qLow.Find("shift"_s, nullptr) ||
+                                qLow.Find("alt"_s, nullptr) ||
+                                qLow.Find("cmd"_s, nullptr) ||
+                                qLow.Find("+"_s, nullptr) ||
+                                qLow.Find("~"_s, nullptr));
+
+        if (isModifierQuery)
+        {
+            // Direct substring match (e.g. "ctrl+e", "shift", "u~l", "u~")
+            if (scLow.Find(qLow, nullptr))
+                return true;
+
+            // Compact match without spaces (e.g. "ctrl + e" matches "ctrl+e")
+            String qCompact = qLow;
+            qCompact.Replace(' ', ""_s) iferr_ignore("Replace");
+            String scCompact = scLow;
+            scCompact.Replace(' ', ""_s) iferr_ignore("Replace");
+            if (scCompact.Find(qCompact, nullptr))
+                return true;
+
+            // Space-to-plus match (e.g. "ctrl e" matches "ctrl+e")
+            String qWithPlus = qLow;
+            qWithPlus.Replace(' ', "+"_s) iferr_ignore("Replace");
+            if (scLow.Find(qWithPlus, nullptr))
+                return true;
+
+            // Chords with space instead of tilde (e.g. "u l" matches "u~l")
+            String scTildeToSpace = scLow;
+            scTildeToSpace.Replace('~', ' ') iferr_ignore("Replace");
+            if (scTildeToSpace.Find(qLow, nullptr))
+                return true;
+
+            return false;
+        }
+
+        // For non-modifier queries, test individual shortcut tokens (split by ", ")
+        // so that single keys like "e", "f1", "space" don't match modifier names ("shift", "ctrl")
+        Bool tokenMatch = false;
+        scLow.Split(","_s, true, [&](const maxon::String& part) -> maxon::Result<Bool>
+        {
+            if (part == qLow)
+            {
+                tokenMatch = true;
+                return false; // stop iteration
+            }
+            if (qLow.GetLength() > 2 && part.Find(qLow, nullptr))
+            {
+                tokenMatch = true;
+                return false;
+            }
+            return true; // continue iteration
+        }) iferr_ignore("Split");
+
+        if (tokenMatch)
+            return true;
+
+        return false;
+    };
+
+    if (testQuery(q))
+        return true;
+
+    if (qAlt.IsPopulated() && qAlt != q && testQuery(qAlt))
+        return true;
+
+    return false;
 }
 
 void PieMenuEditorDialog::FilterCommands(const String& query)
@@ -950,6 +1158,17 @@ void PieMenuEditorDialog::FilterCommands(const String& query)
     String q = query;
     q = q.ToLower();
 
+    Bool shortcutOnly = false;
+    if (q.StartsWith('@') || q.StartsWith('#'))
+    {
+        shortcutOnly = true;
+        q = q.GetRightPart(1);
+        q.Trim() iferr_ignore("Trim");
+    }
+
+    String qAlt = ConvertRuToEnLayout(q);
+    Bool hasAlt = (qAlt.IsPopulated() && qAlt != q);
+
     for (CommandItem& item : m_allCommands)
     {
         Bool match = false;
@@ -957,9 +1176,18 @@ void PieMenuEditorDialog::FilterCommands(const String& query)
         {
             match = true;
         }
+        else if (shortcutOnly)
+        {
+            if (ShortcutMatchesQuery(item.shortcut, q, qAlt))
+                match = true;
+        }
         else
         {
-            if (item.name.ToLower().Find(q, nullptr))
+            if (item.name.ToLower().Find(q, nullptr) || (hasAlt && item.name.ToLower().Find(qAlt, nullptr)))
+            {
+                match = true;
+            }
+            else if (ShortcutMatchesQuery(item.shortcut, q, qAlt))
             {
                 match = true;
             }
@@ -1123,13 +1351,18 @@ Bool PieMenuEditorDialog::InitValues()
         BaseContainer layout;
         layout.SetInt32('icon', LV_USER);
         layout.SetInt32('tree', LV_TREE);
+        layout.SetInt32('scut', LV_USER);
         layout.SetInt32('cmdi', LV_USER);
-        m_treeGui->SetLayout(3, layout);
+        m_treeGui->SetLayout(4, layout);
         m_treeGui->SetHeaderText('icon', ""_s);
         m_treeGui->SetHeaderText('tree', "Command"_s);
+        m_treeGui->SetHeaderText('scut', "Shortcut"_s);
         m_treeGui->SetHeaderText('cmdi', "ID"_s);
 
         m_treeGui->SetRoot(this, &m_treeFunctions, this);
+        m_treeGui->SetColumnWidthUser('icon', 24);
+        m_treeGui->SetColumnWidthUser('tree', 150);
+        m_treeGui->SetColumnWidthUser('cmdi', 65);
         m_treeGui->Refresh();
     }
 

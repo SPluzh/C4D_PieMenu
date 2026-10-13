@@ -14,6 +14,7 @@ struct CommandItem
 {
     Int32    id = 0;
     String   name;
+    String   shortcut;
     IconData icon;
     Bool     hasIcon = false;
     Int32    filterIndex = 0;
