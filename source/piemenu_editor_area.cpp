@@ -761,8 +761,12 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     if (prof->showTitle && prof->name.IsPopulated())
     {
         String badge = "["_s + prof->name + "]"_s;
+        Int32 bx = (Int32)cx;
+        Int32 by = (Int32)(cy - hoverOuterR - 22.0 * invDpi);
+        DrawSetTextCol(Vector(0.0, 0.0, 0.0), COLOR_TRANS);
+        DrawText(badge, bx + 1, by + 1, DRAWTEXT_HALIGN_CENTER | DRAWTEXT_VALIGN_CENTER);
         DrawSetTextCol(Vector(0.50, 0.70, 0.90), COLOR_TRANS);
-        DrawText(badge, (Int32)cx, (Int32)(cy - hoverOuterR - 16.0 * invDpi), DRAWTEXT_HALIGN_CENTER);
+        DrawText(badge, bx, by, DRAWTEXT_HALIGN_CENTER | DRAWTEXT_VALIGN_CENTER);
     }
 
     // 8. Bottom hint
