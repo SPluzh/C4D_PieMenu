@@ -25,6 +25,7 @@ static const Int32 PIE_CONFIG_MAGIC_V13 = 0x5049453D; // "PIE="
 static const Int32 PIE_CONFIG_MAGIC_V14 = 0x5049453E; // "PIE>"
 static const Int32 PIE_CONFIG_MAGIC_V15 = 0x5049453F; // "PIE?"
 static const Int32 PIE_CONFIG_MAGIC_V16 = 0x50494540; // "PIE@"
+static const Int32 PIE_CONFIG_MAGIC_V17 = 0x50494541; // "PIEA"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -798,6 +799,11 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     j.Set("slotCount", (int64_t)prof.slotCount);
     j.Set("showTitle", (bool)prof.showTitle);
     j.Set("showItemName", (bool)prof.showItemName);
+    JsonValue jBg = JsonValue::Array();
+    jBg.Push((double)prof.bgColor.x);
+    jBg.Push((double)prof.bgColor.y);
+    jBg.Push((double)prof.bgColor.z);
+    j.Set("bgColor", jBg);
     j.Set("outerRadius", (double)prof.outerRadius);
     j.Set("innerRadius", (double)prof.innerRadius);
     j.Set("radius", (double)prof.outerRadius);
@@ -858,6 +864,19 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     outProf.slotCount = sc;
     outProf.showTitle = jProf.GetBool("showTitle", true);
     outProf.showItemName = jProf.GetBool("showItemName", true);
+    const std::vector<JsonValue>* arrBg = jProf.GetArray("bgColor");
+    if (arrBg && arrBg->size() >= 3)
+    {
+        outProf.bgColor = Vector(
+            (*arrBg)[0].numVal,
+            (*arrBg)[1].numVal,
+            (*arrBg)[2].numVal
+        );
+    }
+    else
+    {
+        outProf.bgColor = Vector(0.09, 0.10, 0.13);
+    }
     if (jProf.Find("outerRadius"))
     {
         outProf.outerRadius = (Float)jProf.GetNumber("outerRadius", 112.0);
@@ -1068,7 +1087,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V16)
+    if (firstVal == PIE_CONFIG_MAGIC_V17)
+    {
+        version = 17;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V16)
     {
         version = 16;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -1474,6 +1499,15 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.showItemName = true;
         }
 
+        if (version >= 17)
+        {
+            file->ReadVector64(&prof.bgColor);
+        }
+        else
+        {
+            prof.bgColor = Vector(0.09, 0.10, 0.13);
+        }
+
         outProfiles.Append(prof) iferr_ignore("Append");
     }
 
@@ -1659,7 +1693,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V17 || firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1761,7 +1795,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V17 || firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Float dummyRadius = m_radius;
@@ -1931,8 +1965,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V16 header to denote modifier custom label support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V16);
+    // Write magic V17 header to denote menu background color support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V17);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -2032,6 +2066,7 @@ Bool PieProfileManager::SaveToFile()
         file->WriteBool(prof.stayOpenWithCenterCommand);
         file->WriteFloat64(prof.opacity);
         file->WriteBool(prof.showItemName);
+        file->WriteVector64(prof.bgColor);
     }
 
     file->WriteBool(m_useCtrlShift);
@@ -2157,6 +2192,7 @@ Int32 PieProfileManager::AddProfile(const maxon::String& name, PieContextMode co
     p.displayMode = m_displayMode;
     p.stayOpenOnRelease = m_stayOpenOnRelease;
     p.stayOpenWithCenterCommand = m_stayOpenWithCenterCommand;
+    p.bgColor = Vector(0.09, 0.10, 0.13);
 
     m_profiles.Append(p) iferr_ignore("Append");
     return (Int32)m_profiles.GetCount() - 1;

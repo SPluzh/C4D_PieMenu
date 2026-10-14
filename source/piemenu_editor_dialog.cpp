@@ -30,6 +30,7 @@ enum
     IDC_GROUP_MENU_SETTINGS,
     IDC_PROFILE_NAME_EDIT,
     IDC_PROFILE_CONTEXT_COMBO,
+    IDC_PROFILE_BG_COLOR,
     IDC_SLOTCOUNT_NUMBER,
     IDC_SLOTCOUNT_SLIDER,
     IDC_PROFILE_SHOW_TITLE,
@@ -817,16 +818,15 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupEnd();
     GroupEnd();
 
-    // Row 2: Context selection immediately below Active Menu
+    // Row 2: Context selection immediately below Active Menu and Menu BG Color
     AddStaticText(0, BFH_LEFT, 0, 0, "Context:"_s, 0);
     GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
     GroupSpace(6, 0);
     AddComboBox(IDC_PROFILE_CONTEXT_COMBO, BFH_SCALEFIT, 200, 0);
-    GroupBegin(0, BFH_RIGHT, 3, 0, ""_s, 0);
+    GroupBegin(0, BFH_RIGHT, 2, 0, ""_s, 0);
     GroupSpace(6, 0);
-    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
-    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
-    AddStaticText(0, BFH_LEFT, 75, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "BG Color:"_s, 0);
+    AddColorField(IDC_PROFILE_BG_COLOR, BFH_LEFT, 65, 18);
     GroupEnd();
     GroupEnd();
 
@@ -1775,6 +1775,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     {
         SetString(IDC_PROFILE_NAME_EDIT, ""_s);
         SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)PieContextMode::Global);
+        SetColorField(IDC_PROFILE_BG_COLOR, Vector(0.09, 0.10, 0.13), 1.0, 1.0, 0);
+        Enable(IDC_PROFILE_BG_COLOR, false);
         SetInt32(IDC_SLOTCOUNT_NUMBER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetInt32(IDC_SLOTCOUNT_SLIDER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetBool(IDC_PROFILE_SHOW_TITLE, true);
@@ -1790,6 +1792,8 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
 
     SetString(IDC_PROFILE_NAME_EDIT, prof->name);
     SetInt32(IDC_PROFILE_CONTEXT_COMBO, (Int32)prof->context);
+    SetColorField(IDC_PROFILE_BG_COLOR, prof->bgColor, 1.0, 1.0, 0);
+    Enable(IDC_PROFILE_BG_COLOR, true);
     SetInt32(IDC_SLOTCOUNT_NUMBER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
@@ -1822,6 +1826,11 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     Int32 ctx = 0;
     if (GetInt32(IDC_PROFILE_CONTEXT_COMBO, ctx))
         prof->context = (PieContextMode)ctx;
+
+    Vector bgCol;
+    Float br = 1.0;
+    if (GetColorField(IDC_PROFILE_BG_COLOR, bgCol, br))
+        prof->bgColor = bgCol;
 
     Int32 sc = 8;
     if (GetInt32(IDC_SLOTCOUNT_SLIDER, sc) || GetInt32(IDC_SLOTCOUNT_NUMBER, sc))
@@ -2531,6 +2540,22 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 {
                     prof->context = (PieContextMode)ctx;
                     RefreshProfileComboList();
+                }
+            }
+            break;
+        }
+
+        case IDC_PROFILE_BG_COLOR:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Vector col;
+                Float br = 1.0;
+                if (GetColorField(IDC_PROFILE_BG_COLOR, col, br))
+                {
+                    prof->bgColor = col;
+                    m_userArea.Redraw();
                 }
             }
             break;

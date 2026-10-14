@@ -1866,23 +1866,27 @@ void PieMenuOverlay::RenderOverlay()
             // Background color
             Gdiplus::Color bgCol;
             Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
+            Vector menuBg = m_activeProfile ? m_activeProfile->bgColor : Vector(0.09, 0.10, 0.13);
             if (isHovered)
             {
-                BYTE r = (BYTE)LocalClampInt((int)(35 + slot.accentColor.x * 65.0), 0, 255);
-                BYTE gr = (BYTE)LocalClampInt((int)(40 + slot.accentColor.y * 65.0), 0, 255);
-                BYTE b = (BYTE)LocalClampInt((int)(50 + slot.accentColor.z * 65.0), 0, 255);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.5 + slot.accentColor.x * 65.0), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.5 + slot.accentColor.y * 65.0), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.5 + slot.accentColor.z * 65.0), 0, 255);
                 bgCol = Gdiplus::Color(245, r, gr, b);
             }
             else if (hasAction)
             {
-                BYTE r = (BYTE)LocalClampInt((int)(26 + slot.accentColor.x * 20.0), 0, 255);
-                BYTE gr = (BYTE)LocalClampInt((int)(28 + slot.accentColor.y * 20.0), 0, 255);
-                BYTE b = (BYTE)LocalClampInt((int)(36 + slot.accentColor.z * 20.0), 0, 255);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.15 + slot.accentColor.x * 20.0), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.15 + slot.accentColor.y * 20.0), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.15 + slot.accentColor.z * 20.0), 0, 255);
                 bgCol = Gdiplus::Color(220, r, gr, b);
             }
             else
             {
-                bgCol = Gdiplus::Color(205, 23, 26, 33);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0), 0, 255);
+                bgCol = Gdiplus::Color(205, r, gr, b);
             }
 
             Gdiplus::SolidBrush bgBrush(bgCol);
@@ -2123,39 +2127,52 @@ void PieMenuOverlay::RenderOverlay()
         Gdiplus::GraphicsPath hubPath;
         hubPath.AddEllipse(cx - deadzoneRadius, cy - deadzoneRadius, deadzoneRadius * 2.0f, deadzoneRadius * 2.0f);
 
+        Vector menuBg = m_activeProfile ? m_activeProfile->bgColor : Vector(0.09, 0.10, 0.13);
         Gdiplus::Color hubBgCol;
         if (centerHovered)
         {
             if (centerConfigured)
             {
-                BYTE r = (BYTE)LocalClampInt((int)(35 + slot8.accentColor.x * 65.0), 0, 255);
-                BYTE gr = (BYTE)LocalClampInt((int)(40 + slot8.accentColor.y * 65.0), 0, 255);
-                BYTE b = (BYTE)LocalClampInt((int)(50 + slot8.accentColor.z * 65.0), 0, 255);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.5 + slot8.accentColor.x * 65.0), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.5 + slot8.accentColor.y * 65.0), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.5 + slot8.accentColor.z * 65.0), 0, 255);
                 hubBgCol = Gdiplus::Color(245, r, gr, b);
             }
             else if (isSubMenuMode)
             {
-                hubBgCol = Gdiplus::Color(245, 55, 65, 80);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 2.4), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 2.5), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 2.4), 0, 255);
+                hubBgCol = Gdiplus::Color(245, r, gr, b);
             }
             else
             {
-                hubBgCol = Gdiplus::Color(245, 45, 50, 60);
+                BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.95), 0, 255);
+                BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.92), 0, 255);
+                BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.81), 0, 255);
+                hubBgCol = Gdiplus::Color(245, r, gr, b);
             }
         }
         else if (centerConfigured)
         {
-            BYTE r = (BYTE)LocalClampInt((int)(26 + slot8.accentColor.x * 25.0), 0, 255);
-            BYTE gr = (BYTE)LocalClampInt((int)(28 + slot8.accentColor.y * 25.0), 0, 255);
-            BYTE b = (BYTE)LocalClampInt((int)(36 + slot8.accentColor.z * 25.0), 0, 255);
+            BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.15 + slot8.accentColor.x * 25.0), 0, 255);
+            BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.15 + slot8.accentColor.y * 25.0), 0, 255);
+            BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.15 + slot8.accentColor.z * 25.0), 0, 255);
             hubBgCol = Gdiplus::Color(230, r, gr, b);
         }
         else if (isSubMenuMode)
         {
-            hubBgCol = Gdiplus::Color(230, 36, 42, 52);
+            BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.56), 0, 255);
+            BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.61), 0, 255);
+            BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.57), 0, 255);
+            hubBgCol = Gdiplus::Color(230, r, gr, b);
         }
         else
         {
-            hubBgCol = Gdiplus::Color(220, 26, 28, 35);
+            BYTE r = (BYTE)LocalClampInt((int)(menuBg.x * 255.0 * 1.13), 0, 255);
+            BYTE gr = (BYTE)LocalClampInt((int)(menuBg.y * 255.0 * 1.07), 0, 255);
+            BYTE b = (BYTE)LocalClampInt((int)(menuBg.z * 255.0 * 1.06), 0, 255);
+            hubBgCol = Gdiplus::Color(220, r, gr, b);
         }
 
         Gdiplus::SolidBrush hubBgBrush(hubBgCol);
@@ -2363,6 +2380,7 @@ void PieMenuOverlay::RenderOverlay()
         }
 
         float itemY = cy + hoverOuterR + 18.0f;
+        float itemLabelBottom = itemY;
         if (hasItemLabel && !wItemTitle.empty())
         {
             Gdiplus::Font itemFont(L"Segoe UI", 9.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
@@ -2373,6 +2391,7 @@ void PieMenuOverlay::RenderOverlay()
             float padX = 12.0f;
             float padY = 3.5f;
             Gdiplus::RectF pillRect(bounds.X - padX, bounds.Y - padY, bounds.Width + padX * 2.0f, bounds.Height + padY * 2.0f);
+            itemLabelBottom = pillRect.Y + pillRect.Height;
 
             Gdiplus::GraphicsPath pillPath;
             float cornerR = 7.0f;
@@ -2428,9 +2447,13 @@ void PieMenuOverlay::RenderOverlay()
         if (!modTag.empty())
         {
             Gdiplus::Font mFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+            Gdiplus::RectF mBounds;
+            g.MeasureString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx, 0.0f), &format, &mBounds);
+            float mHalfH = (mBounds.Height > 0.0f) ? (mBounds.Height * 0.5f) : 7.0f;
+
+            float mY = hasItemLabel ? (itemLabelBottom + 12.0f + mHalfH) : (cy + hoverOuterR + 18.0f);
             Gdiplus::SolidBrush mShadow(Gdiplus::Color(200, 0, 0, 0));
             Gdiplus::SolidBrush mBrush(Gdiplus::Color(255, 255, 210, 80)); // Warm gold badge
-            float mY = hasItemLabel ? (itemY + 23.0f) : (cy + hoverOuterR + 18.0f);
             g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx + 1.0f, mY + 1.0f), &format, &mShadow);
             g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx, mY), &format, &mBrush);
         }

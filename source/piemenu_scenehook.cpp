@@ -298,18 +298,19 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         GetSectorAnglesRad(rOut, divRad0, aStartOut, aEndOut);
 
         Bool hasAction = (slot.commandId > 0 || slot.IsSubMenu());
+        Vector menuBg = m_activeProfile ? m_activeProfile->bgColor : Vector(0.09, 0.10, 0.13);
         Vector bgCol;
         if (isHovered)
         {
-            bgCol = Vector(0.14, 0.16, 0.20) + slot.accentColor * 0.22;
+            bgCol = menuBg * 1.5 + slot.accentColor * 0.22;
         }
         else if (hasAction)
         {
-            bgCol = Vector(0.10, 0.11, 0.14) + slot.accentColor * 0.06;
+            bgCol = menuBg * 1.15 + slot.accentColor * 0.06;
         }
         else
         {
-            bgCol = Vector(0.09, 0.10, 0.13);
+            bgCol = menuBg;
         }
 
         // Draw sector body
@@ -423,13 +424,14 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
     Bool centerConfigured = (slot8.enabled && (slot8.commandId > 0 || slot8.IsSubMenu()));
     Bool centerHovered = (m_hoveredSlot == CENTER_SLOT_INDEX);
 
+    Vector menuBg = m_activeProfile ? m_activeProfile->bgColor : Vector(0.09, 0.10, 0.13);
     Vector hubBgCol;
     if (centerHovered)
-        hubBgCol = Vector(0.14, 0.16, 0.20) + slot8.accentColor * 0.22;
+        hubBgCol = menuBg * 1.5 + slot8.accentColor * 0.22;
     else if (centerConfigured)
-        hubBgCol = Vector(0.10, 0.11, 0.14) + slot8.accentColor * 0.08;
+        hubBgCol = menuBg * 1.15 + slot8.accentColor * 0.08;
     else
-        hubBgCol = Vector(0.10, 0.11, 0.14);
+        hubBgCol = menuBg * 1.1;
 
     drawScreenCircleFilled(ox, oy, deadzoneRadius, hubBgCol, 28);
 

@@ -364,18 +364,19 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         GetSectorAnglesRad(rIn,  divRad0, aStartIn,  aEndIn);
         GetSectorAnglesRad(rOut, divRad0, aStartOut, aEndOut);
 
+        Vector menuBg = prof ? prof->bgColor : Vector(0.09, 0.10, 0.13);
         Vector bgCol;
         if (isDragHover)
         {
-            bgCol = Vector(0.22, 0.24, 0.28) + slot.accentColor * 0.20;
+            bgCol = menuBg * 2.2 + slot.accentColor * 0.20;
         }
         else if (isDragSource)
         {
-            bgCol = Vector(0.18, 0.22, 0.30) + slot.accentColor * 0.20;
+            bgCol = menuBg * 1.8 + slot.accentColor * 0.20;
         }
         else if (isSelected)
         {
-            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.25;
+            bgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot.accentColor * 0.25;
         }
         else if (!slot.enabled)
         {
@@ -383,11 +384,11 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         }
         else if (slot.commandId > 0 || slot.IsSubMenu())
         {
-            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.08;
+            bgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot.accentColor * 0.08;
         }
         else
         {
-            bgCol = Vector(0.09, 0.10, 0.13);
+            bgCol = menuBg;
         }
 
         if (slot.enabled && opVal < 0.999)
@@ -544,19 +545,20 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
             curIconSz = 8.0;
         Int32 sz = (Int32)curIconSz;
 
+        Vector menuBg = prof ? prof->bgColor : Vector(0.09, 0.10, 0.13);
         Vector bgCol;
         if (isDragHover)
-            bgCol = Vector(0.22, 0.24, 0.28) + slot.accentColor * 0.20;
+            bgCol = menuBg * 2.2 + slot.accentColor * 0.20;
         else if (isDragSource)
-            bgCol = Vector(0.18, 0.22, 0.30) + slot.accentColor * 0.20;
+            bgCol = menuBg * 1.8 + slot.accentColor * 0.20;
         else if (isSelected)
-            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.25;
+            bgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot.accentColor * 0.25;
         else if (!slot.enabled)
             bgCol = defaultBg;
         else if (slot.commandId > 0 || slot.IsSubMenu())
-            bgCol = Vector(0.11, 0.13, 0.17) + slot.accentColor * 0.08;
+            bgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot.accentColor * 0.08;
         else
-            bgCol = Vector(0.09, 0.10, 0.13);
+            bgCol = menuBg;
 
         Int32 drawflags = BMP_ALLOWALPHA | BMP_TRANSPARENTALPHA | BMP_NORMALSCALED;
         if (icon.flags & ICONDATAFLAGS::APPLYCOLORPROFILE)
@@ -617,25 +619,26 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     Bool isDragHover8 = (m_dragHoverSlot == CENTER_SLOT_INDEX);
     Bool isDragSource8 = (m_dragSourceSlot == CENTER_SLOT_INDEX);
 
+    Vector menuBg = prof ? prof->bgColor : Vector(0.09, 0.10, 0.13);
     Vector hubBgCol;
     Vector hubBorderCol;
     Float hubBorderWidth = 1.0;
 
     if (isDragHover8)
     {
-        hubBgCol = Vector(0.22, 0.24, 0.28) + slot8.accentColor * 0.20;
+        hubBgCol = menuBg * 2.2 + slot8.accentColor * 0.20;
         hubBorderCol = Vector(1.0, 1.0, 1.0);
         hubBorderWidth = 2.5;
     }
     else if (isDragSource8)
     {
-        hubBgCol = Vector(0.18, 0.22, 0.30) + slot8.accentColor * 0.20;
+        hubBgCol = menuBg * 1.8 + slot8.accentColor * 0.20;
         hubBorderCol = Vector(0.25, 0.70, 1.0);
         hubBorderWidth = 2.2;
     }
     else if (isSelected8)
     {
-        hubBgCol = Vector(0.11, 0.13, 0.17) + slot8.accentColor * 0.25;
+        hubBgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot8.accentColor * 0.25;
         hubBorderCol = slot8.accentColor;
         hubBorderWidth = 2.2;
     }
@@ -647,13 +650,13 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
     }
     else if (slot8.commandId > 0 || slot8.IsSubMenu())
     {
-        hubBgCol = Vector(0.11, 0.13, 0.17) + slot8.accentColor * 0.08;
+        hubBgCol = menuBg + Vector(0.02, 0.03, 0.04) + slot8.accentColor * 0.08;
         hubBorderCol = slot8.accentColor * 0.65;
         hubBorderWidth = 1.2;
     }
     else
     {
-        hubBgCol = Vector(0.10, 0.11, 0.14);
+        hubBgCol = menuBg * 1.1;
         hubBorderCol = Vector(0.32, 0.35, 0.40);
         hubBorderWidth = 1.0;
     }
