@@ -1409,6 +1409,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
         Enable(IDC_PROFILE_STAY_OPEN_CENTER, false);
         SetPercent(IDC_GLOBAL_OPACITY, 1.0, 10.0, 100.0, 1.0);
         Enable(IDC_GLOBAL_OPACITY, false);
+        SetInt32(IDC_GLOBAL_DISPLAY_MODE, (Int32)PieDisplayMode::IconOnly);
         return;
     }
 

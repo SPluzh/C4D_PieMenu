@@ -337,7 +337,7 @@ void PieProfileManager::InitDefaults()
     m_deadzone = 26.0;
     m_iconSize = 24.0;
     m_opacity = 1.0;
-    m_displayMode = PieDisplayMode::IconAndLabel;
+    m_displayMode = PieDisplayMode::IconOnly;
     m_stayOpenOnRelease = false;
     m_stayOpenWithCenterCommand = false;
 }
@@ -560,7 +560,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     outProf.iconSize = (Float)jProf.GetNumber("iconSize", 24.0);
     outProf.opacity = (Float)jProf.GetNumber("opacity", 1.0);
     if (outProf.opacity < 0.1 || outProf.opacity > 1.0) outProf.opacity = 1.0;
-    outProf.displayMode = (PieDisplayMode)(int)jProf.GetInt("displayMode", 0);
+    outProf.displayMode = (PieDisplayMode)(int)jProf.GetInt("displayMode", (int64_t)PieDisplayMode::IconOnly);
     outProf.stayOpenOnRelease = jProf.GetBool("stayOpenOnRelease", false);
     outProf.stayOpenWithCenterCommand = jProf.GetBool("stayOpenWithCenterCommand", false);
 
@@ -879,7 +879,7 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.radius = 112.0;
             prof.deadzone = 26.0;
             prof.iconSize = 24.0;
-            prof.displayMode = PieDisplayMode::IconAndLabel;
+            prof.displayMode = PieDisplayMode::IconOnly;
         }
 
         if (version >= 11)
@@ -1113,7 +1113,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
             Float tempDeadzone = 26.0;
             Float tempIconSize = 24.0;
             Float tempOpacity = 1.0;
-            PieDisplayMode tempDisplayMode = PieDisplayMode::IconAndLabel;
+            PieDisplayMode tempDisplayMode = PieDisplayMode::IconOnly;
             Bool tempStayOpenOnRelease = false;
             Bool tempStayOpenWithCenterCommand = false;
             Bool tempCtrlShift = false;
