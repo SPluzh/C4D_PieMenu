@@ -22,7 +22,7 @@
   - Directional laser pointer guideline connecting the hub to the cursor.
   - Prominent glowing accent highlights for the hovered slot.
   - Deadzone crosshair reticle.
-  - Optional profile title badge above the menu.
+  - Optional profile title badge above the menu, and optional hovered item name badge below the menu.
   - **Inactive Slots as Gaps**: Inactive or unassigned slots can appear as clean gaps, keeping your most-used commands clearly separated and easy to hit.
 
 - **Modifier Keys Support (Alt, Shift, Ctrl)**:
@@ -77,7 +77,7 @@
   - **Per-Menu Icon Size**: Customize icon size in pixels (12px to 64px) individually per menu.
   - Adjustable Outer Radius and Deadzone Radius.
   - **Dynamic Slot Count**: Adjust radial slice count from 2 up to 24 items using an interactive numeric slider with real-time preview.
-  - Toggle *Show Menu Title* badge.
+  - Toggle *Show Menu Title* badge and *Show Item Name* badge at the bottom.
   - Toggle *Stay Open on Key Release*: When checked, releasing the trigger hotkey keeps the menu (including submenus) open for mouse click selection. When unchecked (default), releasing the hotkey executes the hovered slot or immediately closes the menu/submenu if released without an assigned command.
   - Toggle *Stay Open with Center Command*: When checked alongside *Stay Open on Key Release*, releasing the trigger hotkey keeps the menu open even if a command is assigned to the center slot (the center command will only be executed upon explicit mouse click). When unchecked, releasing the hotkey in the center hub executes the assigned center command immediately.
 - **Import & Export Settings**:

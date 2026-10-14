@@ -486,6 +486,33 @@ void PieMenuSceneHook::DrawPieMenu(BaseDraw* bd)
         bd->SetPen(Vector(0.50, 0.70, 0.90));
         bd->DrawHUDText((Int32)(ox - (bLen * 6.5) * 0.5), (Int32)(oy - hoverOuterR - 16.0), badge);
     }
+
+    // 7. Hovered item name badge at bottom
+    if (m_activeProfile->showItemName && m_hoveredSlot != NOTOK && m_hoveredSlot >= 0)
+    {
+        String itemText;
+        if (m_hoveredSlot < count)
+        {
+            const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+            if (slot.enabled && (slot.commandId > 0 || slot.IsSubMenu() || slot.customLabel.IsPopulated()))
+            {
+                itemText = slot.GetEffectiveTitle();
+                if (slot.IsSubMenu()) itemText += " >"_s;
+            }
+        }
+        else if (m_hoveredSlot == CENTER_SLOT_INDEX && centerConfigured)
+        {
+            itemText = slot8.GetEffectiveTitle();
+            if (slot8.IsSubMenu()) itemText += " >"_s;
+        }
+
+        if (itemText.IsPopulated())
+        {
+            Int32 tLen = itemText.GetLength();
+            bd->SetPen(Vector(1.0, 1.0, 1.0));
+            bd->DrawHUDText((Int32)(ox - (tLen * 6.5) * 0.5), (Int32)(oy + hoverOuterR + 16.0), itemText);
+        }
+    }
 }
 
 

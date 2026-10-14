@@ -27,6 +27,7 @@ enum
     IDC_SLOTCOUNT_NUMBER,
     IDC_SLOTCOUNT_SLIDER,
     IDC_PROFILE_SHOW_TITLE,
+    IDC_PROFILE_SHOW_ITEM_NAME,
     IDC_PROFILE_STAY_OPEN_ON_RELEASE,
     IDC_PROFILE_STAY_OPEN_CENTER,
 
@@ -700,12 +701,16 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupEnd();
     GroupEnd();
 
-    // Row 3: Name & Show Title
+    // Row 3: Name & Show Title / Show Item Name
     AddStaticText(0, BFH_LEFT, 0, 0, "Name:"_s, 0);
     GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
     GroupSpace(6, 0);
-    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 200, 0);
-    AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_RIGHT, 0, 0, "Show Menu Title"_s);
+    AddEditText(IDC_PROFILE_NAME_EDIT, BFH_SCALEFIT, 160, 0);
+    GroupBegin(0, BFH_RIGHT, 2, 0, ""_s, 0);
+    GroupSpace(6, 0);
+    AddCheckbox(IDC_PROFILE_SHOW_TITLE, BFH_LEFT, 0, 0, "Show Title"_s);
+    AddCheckbox(IDC_PROFILE_SHOW_ITEM_NAME, BFH_LEFT, 0, 0, "Show Item Name"_s);
+    GroupEnd();
     GroupEnd();
 
     // Row 4: Slots count compact number box + stretched slider
@@ -1398,6 +1403,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
         SetInt32(IDC_SLOTCOUNT_NUMBER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetInt32(IDC_SLOTCOUNT_SLIDER, 8, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
         SetBool(IDC_PROFILE_SHOW_TITLE, true);
+        SetBool(IDC_PROFILE_SHOW_ITEM_NAME, true);
         SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, false);
         SetBool(IDC_PROFILE_STAY_OPEN_CENTER, false);
         Enable(IDC_PROFILE_STAY_OPEN_CENTER, false);
@@ -1411,6 +1417,7 @@ void PieMenuEditorDialog::UpdateMenuSettingsUI()
     SetInt32(IDC_SLOTCOUNT_NUMBER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetInt32(IDC_SLOTCOUNT_SLIDER, prof->slotCount, MIN_SLOT_COUNT, MAX_SLOT_COUNT, 1);
     SetBool(IDC_PROFILE_SHOW_TITLE, prof->showTitle);
+    SetBool(IDC_PROFILE_SHOW_ITEM_NAME, prof->showItemName);
     SetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, prof->stayOpenOnRelease);
     SetBool(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenWithCenterCommand);
     Enable(IDC_PROFILE_STAY_OPEN_CENTER, prof->stayOpenOnRelease);
@@ -1451,6 +1458,10 @@ void PieMenuEditorDialog::ApplyMenuSettingsChanges()
     Bool st = true;
     if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
         prof->showTitle = st;
+
+    Bool sin = true;
+    if (GetBool(IDC_PROFILE_SHOW_ITEM_NAME, sin))
+        prof->showItemName = sin;
 
     Bool so = false;
     if (GetBool(IDC_PROFILE_STAY_OPEN_ON_RELEASE, so))
@@ -2033,6 +2044,21 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 if (GetBool(IDC_PROFILE_SHOW_TITLE, st))
                 {
                     prof->showTitle = st;
+                    m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
+        case IDC_PROFILE_SHOW_ITEM_NAME:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Bool sin = true;
+                if (GetBool(IDC_PROFILE_SHOW_ITEM_NAME, sin))
+                {
+                    prof->showItemName = sin;
                     m_userArea.Redraw();
                 }
             }

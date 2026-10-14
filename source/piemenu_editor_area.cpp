@@ -769,6 +769,27 @@ void PieMenuEditorArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const Ba
         DrawText(badge, bx, by, DRAWTEXT_HALIGN_CENTER | DRAWTEXT_VALIGN_CENTER);
     }
 
+    // 7b. Item name badge at bottom (if enabled)
+    if (prof->showItemName)
+    {
+        Int32 targetSlot = (m_dragHoverSlot != NOTOK) ? m_dragHoverSlot : m_selectedSlot;
+        if (targetSlot >= 0 && (targetSlot < prof->slotCount || targetSlot == CENTER_SLOT_INDEX))
+        {
+            const PieSlot& sl = prof->slots[targetSlot];
+            if (sl.enabled && (sl.commandId > 0 || sl.IsSubMenu() || sl.customLabel.IsPopulated()))
+            {
+                String nameStr = sl.GetEffectiveTitle();
+                if (sl.IsSubMenu()) nameStr += " >"_s;
+                Int32 ix = (Int32)cx;
+                Int32 iy = (Int32)(cy + hoverOuterR + 18.0 * invDpi);
+                DrawSetTextCol(Vector(0.0, 0.0, 0.0), COLOR_TRANS);
+                DrawText(nameStr, ix + 1, iy + 1, DRAWTEXT_HALIGN_CENTER | DRAWTEXT_VALIGN_CENTER);
+                DrawSetTextCol(Vector(1.0, 1.0, 1.0), COLOR_TRANS);
+                DrawText(nameStr, ix, iy, DRAWTEXT_HALIGN_CENTER | DRAWTEXT_VALIGN_CENTER);
+            }
+        }
+    }
+
     // 8. Bottom hint
     Int32 hintY = h - 22;
     if (m_dragSourceSlot != NOTOK && m_dragHoverSlot != NOTOK && m_dragHoverSlot != m_dragSourceSlot)

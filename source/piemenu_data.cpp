@@ -19,6 +19,7 @@ static const Int32 PIE_CONFIG_MAGIC_V9 = 0x50494539; // "PIE9"
 static const Int32 PIE_CONFIG_MAGIC_V10 = 0x5049453A; // "PIE:"
 static const Int32 PIE_CONFIG_MAGIC_V11 = 0x5049453B; // "PIE;"
 static const Int32 PIE_CONFIG_MAGIC_V12 = 0x5049453C; // "PIE<"
+static const Int32 PIE_CONFIG_MAGIC_V13 = 0x5049453D; // "PIE="
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -413,6 +414,7 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     j.Set("context", C4DStringToStdString(GetContextShortName(prof.context)));
     j.Set("slotCount", (int64_t)prof.slotCount);
     j.Set("showTitle", (bool)prof.showTitle);
+    j.Set("showItemName", (bool)prof.showItemName);
     j.Set("outerRadius", (double)prof.outerRadius);
     j.Set("innerRadius", (double)prof.innerRadius);
     j.Set("radius", (double)prof.outerRadius);
@@ -532,6 +534,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
     if (sc > MAX_SLOT_COUNT) sc = MAX_SLOT_COUNT;
     outProf.slotCount = sc;
     outProf.showTitle = jProf.GetBool("showTitle", true);
+    outProf.showItemName = jProf.GetBool("showItemName", true);
     if (jProf.Find("outerRadius"))
     {
         outProf.outerRadius = (Float)jProf.GetNumber("outerRadius", 112.0);
@@ -643,7 +646,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V12)
+    if (firstVal == PIE_CONFIG_MAGIC_V13)
+    {
+        version = 13;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V12)
     {
         version = 12;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -900,6 +909,15 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.opacity = 1.0;
         }
 
+        if (version >= 13)
+        {
+            file->ReadBool(&prof.showItemName);
+        }
+        else
+        {
+            prof.showItemName = true;
+        }
+
         outProfiles.Append(prof) iferr_ignore("Append");
     }
 
@@ -1085,7 +1103,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1187,7 +1205,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Float dummyRadius = m_radius;
@@ -1357,8 +1375,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V12 header to denote opacity support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V12);
+    // Write magic V13 header to denote showItemName support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V13);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1398,6 +1416,7 @@ Bool PieProfileManager::SaveToFile()
         file->WriteBool(prof.stayOpenOnRelease);
         file->WriteBool(prof.stayOpenWithCenterCommand);
         file->WriteFloat64(prof.opacity);
+        file->WriteBool(prof.showItemName);
     }
 
     file->WriteBool(m_useCtrlShift);

@@ -2301,7 +2301,98 @@ void PieMenuOverlay::RenderOverlay()
             g.DrawString(wBadge.c_str(), -1, &bFont, Gdiplus::PointF(cx, bY), &format, &bBrush);
         }
 
-        // 6. Active modifier indicator badge
+        // 6. Hovered item label badge at bottom (if enabled)
+        bool hasItemLabel = false;
+        std::wstring wItemTitle;
+        Gdiplus::Color itemTextColor(255, 255, 255, 255);
+
+        if (m_activeProfile->showItemName && m_hoveredSlot != NOTOK && m_hoveredSlot >= 0)
+        {
+            if (m_hoveredSlot < count)
+            {
+                const PieSlot& slot = m_activeProfile->slots[m_hoveredSlot];
+                Int32 effCmd = slot.GetCommandForModifiers(actShift, actCtrl, actAlt);
+                if (slot.enabled && (effCmd > 0 || slot.IsSubMenu() || slot.customLabel.IsPopulated()))
+                {
+                    String itemText = slot.GetEffectiveTitleForModifiers(actShift, actCtrl, actAlt);
+                    if (slot.IsSubMenu())
+                    {
+                        itemText += " >"_s;
+                    }
+                    if (itemText.IsPopulated())
+                    {
+                        wItemTitle = ToWString(itemText);
+                        hasItemLabel = true;
+                        BYTE ar = (BYTE)LocalClampInt((int)(slot.accentColor.x * 255.0 + 90.0), 0, 255);
+                        BYTE ag = (BYTE)LocalClampInt((int)(slot.accentColor.y * 255.0 + 90.0), 0, 255);
+                        BYTE ab = (BYTE)LocalClampInt((int)(slot.accentColor.z * 255.0 + 90.0), 0, 255);
+                        itemTextColor = Gdiplus::Color(255, ar, ag, ab);
+                    }
+                }
+            }
+            else if (m_hoveredSlot == CENTER_SLOT_INDEX)
+            {
+                if (centerConfigured)
+                {
+                    String itemText = slot8.GetEffectiveTitleForModifiers(actShift, actCtrl, actAlt);
+                    if (slot8.IsSubMenu())
+                    {
+                        itemText += " >"_s;
+                    }
+                    if (itemText.IsPopulated())
+                    {
+                        wItemTitle = ToWString(itemText);
+                        hasItemLabel = true;
+                        BYTE ar = (BYTE)LocalClampInt((int)(slot8.accentColor.x * 255.0 + 90.0), 0, 255);
+                        BYTE ag = (BYTE)LocalClampInt((int)(slot8.accentColor.y * 255.0 + 90.0), 0, 255);
+                        BYTE ab = (BYTE)LocalClampInt((int)(slot8.accentColor.z * 255.0 + 90.0), 0, 255);
+                        itemTextColor = Gdiplus::Color(255, ar, ag, ab);
+                    }
+                }
+                else if (isSubMenuMode)
+                {
+                    wItemTitle = L"Back to parent menu";
+                    hasItemLabel = true;
+                    itemTextColor = Gdiplus::Color(255, 180, 210, 255);
+                }
+            }
+        }
+
+        float itemY = cy + hoverOuterR + 18.0f;
+        if (hasItemLabel && !wItemTitle.empty())
+        {
+            Gdiplus::Font itemFont(L"Segoe UI", 9.5f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
+            Gdiplus::RectF bounds;
+            g.MeasureString(wItemTitle.c_str(), -1, &itemFont, Gdiplus::PointF(cx, itemY), &format, &bounds);
+
+            // Subtle dark capsule pill behind text
+            float padX = 12.0f;
+            float padY = 3.5f;
+            Gdiplus::RectF pillRect(bounds.X - padX, bounds.Y - padY, bounds.Width + padX * 2.0f, bounds.Height + padY * 2.0f);
+
+            Gdiplus::GraphicsPath pillPath;
+            float cornerR = 7.0f;
+            float rightEdge = pillRect.X + pillRect.Width;
+            float bottomEdge = pillRect.Y + pillRect.Height;
+            pillPath.AddArc(pillRect.X, pillRect.Y, cornerR * 2.0f, cornerR * 2.0f, 180.0f, 90.0f);
+            pillPath.AddArc(rightEdge - cornerR * 2.0f, pillRect.Y, cornerR * 2.0f, cornerR * 2.0f, 270.0f, 90.0f);
+            pillPath.AddArc(rightEdge - cornerR * 2.0f, bottomEdge - cornerR * 2.0f, cornerR * 2.0f, cornerR * 2.0f, 0.0f, 90.0f);
+            pillPath.AddArc(pillRect.X, bottomEdge - cornerR * 2.0f, cornerR * 2.0f, cornerR * 2.0f, 90.0f, 90.0f);
+            pillPath.CloseFigure();
+
+            Gdiplus::SolidBrush pillBg(Gdiplus::Color(210, 18, 22, 28));
+            g.FillPath(&pillBg, &pillPath);
+
+            Gdiplus::Pen pillBorder(Gdiplus::Color(160, 60, 75, 95), 1.0f);
+            g.DrawPath(&pillBorder, &pillPath);
+
+            Gdiplus::SolidBrush tShadow(Gdiplus::Color(220, 0, 0, 0));
+            Gdiplus::SolidBrush tBrush(itemTextColor);
+            g.DrawString(wItemTitle.c_str(), -1, &itemFont, Gdiplus::PointF(cx + 1.0f, itemY + 1.0f), &format, &tShadow);
+            g.DrawString(wItemTitle.c_str(), -1, &itemFont, Gdiplus::PointF(cx, itemY), &format, &tBrush);
+        }
+
+        // 7. Active modifier indicator badge
         std::wstring modTag;
         const PieSlot* hoveredSlotPtr = nullptr;
         if (m_hoveredSlot != NOTOK && m_hoveredSlot >= 0 && (m_hoveredSlot < count || m_hoveredSlot == CENTER_SLOT_INDEX))
@@ -2335,7 +2426,7 @@ void PieMenuOverlay::RenderOverlay()
             Gdiplus::Font mFont(L"Segoe UI", 8.0f, Gdiplus::FontStyleBold, Gdiplus::UnitPoint);
             Gdiplus::SolidBrush mShadow(Gdiplus::Color(200, 0, 0, 0));
             Gdiplus::SolidBrush mBrush(Gdiplus::Color(255, 255, 210, 80)); // Warm gold badge
-            float mY = cy + hoverOuterR + 18.0f;
+            float mY = hasItemLabel ? (itemY + 23.0f) : (cy + hoverOuterR + 18.0f);
             g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx + 1.0f, mY + 1.0f), &format, &mShadow);
             g.DrawString(modTag.c_str(), -1, &mFont, Gdiplus::PointF(cx, mY), &format, &mBrush);
         }

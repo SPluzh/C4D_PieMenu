@@ -98,6 +98,7 @@ struct PieProfile
     PieContextMode context = PieContextMode::Global;
     Int32          slotCount = 8; // 2..24 radial slots
     Bool           showTitle = true;
+    Bool           showItemName = true;
     PieSlot        slots[TOTAL_SLOT_COUNT]; // 0..23 radial, 24 is Center Hub (CENTER_SLOT_INDEX)
     PieHotkey      hotkey;
     Float          outerRadius = 112.0;
