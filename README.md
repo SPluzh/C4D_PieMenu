@@ -118,7 +118,7 @@
 > [!IMPORTANT]
 > **Supported Platform**: Windows 10 / 11 (64-bit) only. macOS is not supported.
 
-1. Download or extract the release archive (`C4D_PieMenu_v<version>.zip`).
+1. Download or extract the release archive (`C4D_PieMenu_v<version>.zip`) from [Releases](https://github.com/SPluzh/C4D_PieMenu/releases).
 2. Copy the `C4D_PieMenu` folder corresponding to your Cinema 4D version (`2025` or `2026`) into your Cinema 4D plugins directory:
    - **User Plugins folder (Recommended)**:
      ```text
