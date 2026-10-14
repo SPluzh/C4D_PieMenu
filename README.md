@@ -19,6 +19,7 @@
 - **Center Hub Slot**: The central deadzone doubles as a dedicated hub slot (e.g. for Undo, Reset, or Deselect).
 - **Modern Annular Aesthetics**:
   - Smooth annular arc segments with hover popout expansion.
+  - Per-menu background color customization with automatic highlight and hover shade adaptation.
   - Directional laser pointer guideline connecting the hub to the cursor.
   - Prominent glowing accent highlights for the hovered slot.
   - Deadzone crosshair reticle.
@@ -56,26 +57,30 @@
 
 ### 3. Visual Configuration Dialog (Extensions -> Pie Menu Configuration)
 - **Built-in Command Palette & Submenu Library (2-Tab Left Column)**:
-  - **C4D Commands Tab**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name or command ID.
+  - **C4D Commands Tab**: Live search through all Cinema 4D built-in tools, commands, and third-party plugins by name, numeric command ID, or existing hotkey/shortcut. Includes a dedicated Shortcut column.
   - **Submenus Tab**: Browse all created profiles with item count and context badges. Double-click or drag any menu onto a pie slot to link it as a submenu! Includes `+ New Submenu` and `Assign to Slot` buttons.
 - **Drag & Drop Assignment & Slot Rearrangement**:
-  - Drag commands or submenus directly onto radial slots or the slot inspector.
-  - **Drag & Drop with Modifiers**: Hold `Shift`, `Ctrl`, or `Alt` while dragging to assign commands directly to that modifier action.
+  - Drag commands or submenus directly onto radial slots, the slot inspector, or specific modifier rows.
+  - **Drag & Drop with Modifiers**: Hold `Shift`, `Ctrl`, or `Alt` while dragging onto a radial slot to assign commands directly to that modifier action.
   - **Drag & Drop Slot Reordering**: Freely click and drag slots directly on the pie canvas to swap or move them to different positions. Hold `Ctrl` while dragging to duplicate a slot.
   - Double-clicking a command or submenu assigns it to the active slot.
-- **Interactive Radial Canvas**: Real-time visual canvas displaying dynamic 2 to 24 slot layouts, icons, labels, accent colors, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
+- **Interactive Radial Canvas**: Real-time visual canvas displaying dynamic 2 to 24 slot layouts, icons, labels, accent colors, menu background color, submenu indicators (`>`), and gap distribution. Selected slot glows with its custom accent color. Dynamic visual swap link and gold highlight during slot dragging.
 - **Detailed Slot Inspector**:
   - **Submenu Link Dropdown**: Select any existing menu to link as a submenu, with an **`Edit Menu ->`** button to jump straight to editing that submenu.
-  - Custom Command ID or name.
-  - **Dedicated Modifier Actions**: Inspect and customize `Shift`, `Ctrl`, and `Alt` actions with one-click **`Set Sel`** (captures selected palette command) and **`Reset`** buttons.
+  - **Main Action Row**: Live icon preview, command name, numeric command ID input, and preset controls.
+  - **Tool Presets & Snapshots**: Capture active tool or generator settings as an instant **Snapshot** or select saved asset presets directly from the slot inspector for both main and modifier actions.
+  - **Dedicated Modifier Actions (Shift, Ctrl, Alt)**: Comprehensive inspector rows with live icon preview, command name, numeric ID, custom label override, and tool preset snapshot support. Supports direct drag & drop of commands onto modifier rows.
   - Custom Label overrides.
   - Custom Accent Color picker per slot.
   - Enable / Disable slot toggle.
   - One-click *Clear Slot*.
-- **Display & Sizing Controls (Per-Menu & Global)**:
+- **Display, Sizing & Styling Controls (Per-Menu & Global)**:
+  - **Per-Menu Background Color (`BG Color`)**: Quick color field located directly on the Context row to set a custom background color for each menu. Radial slices and the center hub dynamically adapt their base tones and hover glows to the chosen color in both the editor and live overlay.
   - **Per-Menu Display Style**: Choose between *Icon and Label*, *Icon Only* (minimalist HUD with glowing icons), or *Label Only* (classic text menu) individually for each pie menu profile.
   - **Per-Menu Icon Size**: Customize icon size in pixels (12px to 64px) individually per menu.
-  - Adjustable Outer Radius and Deadzone Radius.
+  - **Independent Outer & Inner Radii**: Adjust both Outer Radius (40px to 300px) and Inner Radius (10px to 200px) sliders independently for custom ring thickness.
+  - **Adjustable Opacity**: Real-time menu transparency slider (10% to 100%).
+  - Adjustable Deadzone Radius.
   - **Dynamic Slot Count**: Adjust radial slice count from 2 up to 24 items using an interactive numeric slider with real-time preview.
   - Toggle *Show Menu Title* badge and *Show Item Name* badge at the bottom.
   - Toggle *Stay Open on Key Release*: When checked, releasing the trigger hotkey keeps the menu (including submenus) open for mouse click selection. When unchecked (default), releasing the hotkey executes the hovered slot or immediately closes the menu/submenu if released without an assigned command.
