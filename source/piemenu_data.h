@@ -19,6 +19,13 @@ enum class PieSlotPos
     Center         // Center Hub
 };
 
+enum class ToolPresetMode
+{
+    None = 0,
+    Snapshot,
+    Asset
+};
+
 struct PieSlot
 {
     Int32         commandId = NOTOK;
@@ -30,7 +37,24 @@ struct PieSlot
     Int32         ctrlCommandId = NOTOK;
     Int32         altCommandId = NOTOK;
 
+    // Tool preset settings (Option 4: Hybrid)
+    ToolPresetMode toolPresetMode = ToolPresetMode::None;
+    maxon::String  toolPresetName;
+    maxon::String  toolPresetAssetId;
+    BaseContainer  toolSettings;
+
     Bool IsSubMenu() const { return subMenuName.IsPopulated(); }
+    Bool HasToolPreset() const { return toolPresetMode != ToolPresetMode::None; }
+    Bool HasSnapshot() const { return !toolSettings.IsEmpty(); }
+    void ClearToolPreset()
+    {
+        toolPresetMode = ToolPresetMode::None;
+        toolPresetName = ""_s;
+        toolPresetAssetId = ""_s;
+        toolSettings.FlushAll();
+    }
+    void ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const;
+
     maxon::String GetEffectiveTitle() const;
     Bool GetIconBitmap(IconData& outIcon) const;
 

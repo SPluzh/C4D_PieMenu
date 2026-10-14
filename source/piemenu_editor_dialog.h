@@ -131,6 +131,8 @@ public:
     SubmenuItem* GetSelectedSubmenu() const { return m_selectedSubmenu; }
     void SetSelectedSubmenu(SubmenuItem* item) { m_selectedSubmenu = item; }
 
+    void PopulatePresetsForTool(Int32 cmdId);
+
     static PieMenuEditorDialog* s_activeDialog;
     Bool m_waitingForHotkey = false;
 
@@ -147,6 +149,15 @@ private:
     SubmenuListTreeView m_submenuTreeFunctions;
     maxon::BaseArray<SubmenuItem> m_allSubmenus;
     SubmenuItem* m_selectedSubmenu = nullptr;
+
+public:
+    struct DiscoveredPresetItem
+    {
+        maxon::String name;
+        maxon::String assetId;
+        Int32 comboId = 0;
+    };
+    maxon::BaseArray<DiscoveredPresetItem> m_currentDiscoveredPresets;
 };
 
 class PieMenuEditorCommand : public CommandData

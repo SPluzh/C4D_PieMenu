@@ -2,6 +2,12 @@
 #include "c4d_general.h"
 #include "c4d_baseplugin.h"
 #include "windows_include.h"
+#include "maxon/assets.h"
+#include "maxon/base_preset_asset.h"
+#include "maxon/asset_draganddrop.h"
+#include "maxon/asset_command.h"
+#include "maxon/datadescription_string.h"
+#include "maxon/subtype_asset.h"
 #include <algorithm>
 #include <functional>
 #include <unordered_set>
@@ -39,6 +45,10 @@ enum
     IDC_INSPECTOR_GOTO_SUBMENU,
     IDC_INSPECTOR_CMD_ID,
     IDC_INSPECTOR_CMD_NAME,
+    IDC_INSPECTOR_PRESET_COMBO,
+    IDC_INSPECTOR_PRESET_CAPTURE_BTN,
+    IDC_INSPECTOR_PRESET_CLEAR_BTN,
+    IDC_INSPECTOR_PRESET_STATUS_TEXT,
     IDC_INSPECTOR_COLOR_FIELD,
     IDC_INSPECTOR_SHIFT_LABEL,
     IDC_INSPECTOR_SHIFT_SET,
@@ -814,6 +824,15 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddEditNumber(IDC_INSPECTOR_CMD_ID, BFH_LEFT, 75, 0);
     GroupEnd();
 
+    AddStaticText(0, BFH_LEFT, 0, 0, "Preset:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddComboBox(IDC_INSPECTOR_PRESET_COMBO, BFH_SCALEFIT, 130, 0);
+    AddButton(IDC_INSPECTOR_PRESET_CAPTURE_BTN, BFH_LEFT, 70, 0, "Snapshot"_s);
+    AddButton(IDC_INSPECTOR_PRESET_CLEAR_BTN, BFH_LEFT, 45, 0, "Reset"_s);
+    AddStaticText(IDC_INSPECTOR_PRESET_STATUS_TEXT, BFH_LEFT, 55, 0, ""_s, 0);
+    GroupEnd();
+
     AddStaticText(0, BFH_LEFT, 0, 0, "Accent Color:"_s, 0);
     AddColorField(IDC_INSPECTOR_COLOR_FIELD, BFH_LEFT, 60, 18);
 
@@ -1243,6 +1262,9 @@ void PieMenuEditorDialog::AssignCommandToSelectedSlot(Int32 cmdId)
     if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         sel = 0;
 
+    if (prof->slots[sel].commandId != cmdId)
+        prof->slots[sel].ClearToolPreset();
+
     prof->slots[sel].commandId = cmdId;
     prof->slots[sel].subMenuName = ""_s;
     prof->slots[sel].customLabel = GetCommandName(cmdId);
@@ -1266,6 +1288,7 @@ void PieMenuEditorDialog::AssignSubmenuToSelectedSlot(const maxon::String& subMe
     if (sel != CENTER_SLOT_INDEX && (sel < 0 || sel >= prof->slotCount))
         sel = 0;
 
+    prof->slots[sel].ClearToolPreset();
     prof->slots[sel].subMenuName = subMenuName;
     prof->slots[sel].commandId = NOTOK;
     prof->slots[sel].customLabel = subMenuName;
@@ -1320,6 +1343,39 @@ void PieMenuEditorDialog::RefreshSubmenuList()
         String title = FormatString("Submenu: @"_s, m_allSubmenus[i].name);
         AddChild(IDC_INSPECTOR_SUBMENU_COMBO, i + 1, title);
     }
+}
+
+void PieMenuEditorDialog::PopulatePresetsForTool(Int32 cmdId)
+{
+    m_currentDiscoveredPresets.Reset();
+    if (cmdId <= 0)
+        return;
+
+    maxon::AssetRepositoryRef repo = maxon::AssetInterface::GetUserPrefsRepository();
+    if (!repo)
+        return;
+
+    maxon::String targetSub = FormatString("_@"_s, cmdId);
+
+    repo.FindAssets(maxon::AssetTypes::DefaultsPreset(), maxon::Id(), maxon::Id(), maxon::ASSET_FIND_MODE::LATEST,
+        [this, &targetSub](const maxon::AssetDescription& asset) -> maxon::Result<maxon::Bool> {
+            iferr_scope;
+            maxon::Id subTypeId = asset.GetMetaData().Get(maxon::ASSETMETADATA::SubType, maxon::Id()) iferr_ignore("Get");
+            maxon::String subTypeStr = subTypeId.ToString();
+
+            if (subTypeStr.Find(targetSub, nullptr))
+            {
+                maxon::String name = asset.GetMetaString(maxon::OBJECT::BASE::NAME) iferr_ignore("GetMetaString");
+                if (name.IsEmpty())
+                    name = asset.GetId().ToString();
+
+                DiscoveredPresetItem item;
+                item.name = name;
+                item.assetId = asset.GetId().ToString();
+                m_currentDiscoveredPresets.Append(item) iferr_ignore("Append");
+            }
+            return true;
+        }) iferr_ignore("FindAssets");
 }
 
 Bool PieMenuEditorDialog::InitValues()
@@ -1707,6 +1763,11 @@ void PieMenuEditorDialog::UpdateInspector()
         SetInt32(IDC_INSPECTOR_SUBMENU_COMBO, 0);
         SetInt32(IDC_INSPECTOR_CMD_ID, 0);
         SetString(IDC_INSPECTOR_CMD_NAME, ""_s);
+        SetInt32(IDC_INSPECTOR_PRESET_COMBO, 0);
+        Enable(IDC_INSPECTOR_PRESET_COMBO, false);
+        Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, false);
+        Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, false);
+        SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, ""_s);
         SetString(IDC_INSPECTOR_SHIFT_LABEL, "None"_s);
         SetString(IDC_INSPECTOR_CTRL_LABEL, "None"_s);
         SetString(IDC_INSPECTOR_ALT_LABEL, "None"_s);
@@ -1796,6 +1857,71 @@ void PieMenuEditorDialog::UpdateInspector()
     }
     Enable(IDC_INSPECTOR_ALT_SET, !slot.IsSubMenu());
     Enable(IDC_INSPECTOR_ALT_CLEAR, !slot.IsSubMenu() && slot.altCommandId > 0);
+
+    // Preset Inspector logic
+    Bool canHavePreset = (!slot.IsSubMenu() && slot.commandId > 0);
+
+    FreeChildren(IDC_INSPECTOR_PRESET_COMBO);
+    AddChild(IDC_INSPECTOR_PRESET_COMBO, 0, "[Default]"_s);
+
+    if (!canHavePreset)
+    {
+        SetInt32(IDC_INSPECTOR_PRESET_COMBO, 0);
+        Enable(IDC_INSPECTOR_PRESET_COMBO, false);
+        Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, false);
+        Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, false);
+        SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, slot.IsSubMenu() ? ""_s : "No Command"_s);
+    }
+    else
+    {
+        PopulatePresetsForTool(slot.commandId);
+
+        Int32 currentComboId = 0;
+        Int32 nextComboId = 1;
+
+        if (slot.HasSnapshot())
+        {
+            Int32 snapId = nextComboId++;
+            String snapTitle = "[Snapshot: Active Settings]"_s;
+            if (slot.toolPresetName.IsPopulated())
+                snapTitle = FormatString("[Snapshot: @]"_s, slot.toolPresetName);
+            AddChild(IDC_INSPECTOR_PRESET_COMBO, snapId, snapTitle);
+            if (slot.toolPresetMode == ToolPresetMode::Snapshot)
+                currentComboId = snapId;
+        }
+
+        for (Int32 i = 0; i < (Int32)m_currentDiscoveredPresets.GetCount(); ++i)
+        {
+            DiscoveredPresetItem& item = m_currentDiscoveredPresets[i];
+            item.comboId = nextComboId++;
+            AddChild(IDC_INSPECTOR_PRESET_COMBO, item.comboId, item.name);
+
+            if (slot.toolPresetMode == ToolPresetMode::Asset && slot.toolPresetAssetId == item.assetId)
+            {
+                currentComboId = item.comboId;
+            }
+        }
+
+        if (slot.toolPresetMode == ToolPresetMode::Asset && currentComboId == 0 && slot.toolPresetAssetId.IsPopulated())
+        {
+            Int32 extraId = nextComboId++;
+            String extraTitle = slot.toolPresetName.IsPopulated() ? slot.toolPresetName : "Asset Preset"_s;
+            AddChild(IDC_INSPECTOR_PRESET_COMBO, extraId, extraTitle);
+            currentComboId = extraId;
+        }
+
+        SetInt32(IDC_INSPECTOR_PRESET_COMBO, currentComboId);
+        Enable(IDC_INSPECTOR_PRESET_COMBO, true);
+        Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, true);
+        Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, slot.HasToolPreset() || slot.HasSnapshot());
+
+        if (slot.toolPresetMode == ToolPresetMode::Snapshot)
+            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, "Snapshot"_s);
+        else if (slot.toolPresetMode == ToolPresetMode::Asset)
+            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, "Asset"_s);
+        else
+            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, slot.HasSnapshot() ? "Default (Saved Snap)"_s : "Default"_s);
+    }
 }
 
 void PieMenuEditorDialog::ApplyInspectorChanges()
@@ -1826,6 +1952,7 @@ void PieMenuEditorDialog::ApplyInspectorChanges()
         {
             slot.subMenuName = m_allSubmenus[subSel - 1].name;
             slot.commandId = NOTOK;
+            slot.ClearToolPreset();
             SetInt32(IDC_INSPECTOR_CMD_ID, 0);
             Enable(IDC_INSPECTOR_CMD_ID, false);
             Enable(IDC_INSPECTOR_GOTO_SUBMENU, true);
@@ -1844,6 +1971,8 @@ void PieMenuEditorDialog::ApplyInspectorChanges()
         {
             if (newCmdId > 0)
             {
+                if (slot.commandId != newCmdId)
+                    slot.ClearToolPreset();
                 slot.commandId = newCmdId;
                 slot.subMenuName = ""_s;
                 if (!slot.customLabel.IsPopulated())
@@ -2299,8 +2428,146 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     prof->slots[sel].shiftCommandId = NOTOK;
                     prof->slots[sel].ctrlCommandId = NOTOK;
                     prof->slots[sel].altCommandId = NOTOK;
+                    prof->slots[sel].ClearToolPreset();
                     UpdateInspector();
                     m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_PRESET_CAPTURE_BTN:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    PieSlot& slot = prof->slots[sel];
+                    if (slot.commandId > 0 && !slot.IsSubMenu())
+                    {
+                        BaseDocument* doc = GetActiveDocument();
+                        if (doc)
+                        {
+                            BaseContainer capturedData;
+                            String capturedName = "Active Settings"_s;
+                            Bool captured = false;
+
+                            // 1. Try tool data first if it's a tool
+                            BaseContainer* toolBc = GetToolData(doc, slot.commandId, true);
+                            if (!toolBc)
+                                toolBc = GetToolData(doc, slot.commandId, false);
+                            if (toolBc && !toolBc->IsEmpty())
+                            {
+                                capturedData = *toolBc;
+                                capturedName = "Tool Settings"_s;
+                                captured = true;
+                            }
+
+                            // 2. Try active object if type matches commandId
+                            if (!captured)
+                            {
+                                BaseObject* activeObj = doc->GetActiveObject();
+                                if (activeObj && activeObj->GetType() == slot.commandId)
+                                {
+                                    capturedData = activeObj->GetData();
+                                    capturedName = activeObj->GetName();
+                                    captured = true;
+                                }
+                            }
+
+                            // 3. Fallback: instantiate temporary default object if it's an object generator/primitive
+                            if (!captured)
+                            {
+                                BaseObject* tempObj = BaseObject::Alloc(slot.commandId);
+                                if (tempObj)
+                                {
+                                    capturedData = tempObj->GetData();
+                                    capturedName = "Object Defaults"_s;
+                                    captured = true;
+                                    BaseObject::Free(tempObj);
+                                }
+                            }
+
+                            if (captured)
+                            {
+                                slot.toolPresetMode = ToolPresetMode::Snapshot;
+                                slot.toolSettings = capturedData;
+                                slot.toolPresetName = capturedName;
+                                slot.toolPresetAssetId = ""_s;
+                                UpdateInspector();
+                                m_userArea.Redraw();
+                            }
+                        }
+                    }
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_PRESET_CLEAR_BTN:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    PieSlot& slot = prof->slots[sel];
+                    slot.ClearToolPreset();
+                    UpdateInspector();
+                    m_userArea.Redraw();
+                }
+            }
+            break;
+        }
+
+        case IDC_INSPECTOR_PRESET_COMBO:
+        {
+            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+            if (prof)
+            {
+                Int32 sel = m_userArea.GetSelectedSlot();
+                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                {
+                    PieSlot& slot = prof->slots[sel];
+                    Int32 comboVal = 0;
+                    if (GetInt32(IDC_INSPECTOR_PRESET_COMBO, comboVal))
+                    {
+                        if (comboVal == 0)
+                        {
+                            slot.toolPresetMode = ToolPresetMode::None;
+                            slot.toolPresetAssetId = ""_s;
+                        }
+                        else
+                        {
+                            Int32 snapComboId = slot.HasSnapshot() ? 1 : -1;
+                            if (snapComboId > 0 && comboVal == snapComboId)
+                            {
+                                slot.toolPresetMode = ToolPresetMode::Snapshot;
+                                slot.toolPresetAssetId = ""_s;
+                                if (!slot.toolPresetName.IsPopulated())
+                                    slot.toolPresetName = "Active Settings"_s;
+                            }
+                            else
+                            {
+                                for (Int32 i = 0; i < (Int32)m_currentDiscoveredPresets.GetCount(); ++i)
+                                {
+                                    const DiscoveredPresetItem& dp = m_currentDiscoveredPresets[i];
+                                    if (dp.comboId == comboVal)
+                                    {
+                                        slot.toolPresetMode = ToolPresetMode::Asset;
+                                        slot.toolPresetAssetId = dp.assetId;
+                                        slot.toolPresetName = dp.name;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        UpdateInspector();
+                        m_userArea.Redraw();
+                    }
                 }
             }
             break;
@@ -2547,6 +2814,53 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
 {
     switch (msg.GetId())
     {
+        case BFM_DRAGRECEIVE:
+        {
+            Int32 type = 0;
+            void* object = nullptr;
+            GetDragObject(msg, &type, &object);
+
+            if (type == DRAGTYPE_ASSET)
+            {
+                if (msg.GetInt32(BFM_DRAG_FINISHED))
+                {
+                    const maxon::DragAndDropDataAssetArray* dndData = static_cast<const maxon::DragAndDropDataAssetArray*>(object);
+                    if (dndData && dndData->GetAssetDescriptions().GetCount() > 0)
+                    {
+                        const maxon::DndAsset& dndAsset = dndData->GetAssetDescriptions()[0];
+                        const maxon::AssetDescription& assetDesc = dndAsset.Get<0>();
+                        if (assetDesc)
+                        {
+                            PieProfileManager& mgr = PieProfileManager::Get();
+                            PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                            if (prof)
+                            {
+                                Int32 sel = m_userArea.GetSelectedSlot();
+                                if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                                {
+                                    PieSlot& slot = prof->slots[sel];
+                                    maxon::String assetIdStr = assetDesc.GetId().ToString();
+                                    maxon::String assetName = assetDesc.GetMetaString(maxon::OBJECT::BASE::NAME) iferr_ignore("GetMetaString");
+                                    if (assetName.IsEmpty())
+                                        assetName = assetIdStr;
+
+                                    slot.toolPresetMode = ToolPresetMode::Asset;
+                                    slot.toolPresetAssetId = assetIdStr;
+                                    slot.toolPresetName = assetName;
+                                    slot.enabled = true;
+
+                                    UpdateInspector();
+                                    m_userArea.Redraw();
+                                }
+                            }
+                        }
+                    }
+                }
+                return SetDragDestination(MOUSE_POINT_HAND);
+            }
+            break;
+        }
+
         case BFM_INPUT:
         {
             if (m_waitingForHotkey)

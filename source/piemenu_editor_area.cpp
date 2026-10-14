@@ -7,6 +7,12 @@
 #include <utility>
 #include "c4d_general.h"
 #include "c4d_gui.h"
+#include "maxon/assets.h"
+#include "maxon/base_preset_asset.h"
+#include "maxon/asset_draganddrop.h"
+#include "maxon/asset_command.h"
+#include "maxon/datadescription_string.h"
+#include "maxon/subtype_asset.h"
 
 namespace cinema
 {
@@ -1051,6 +1057,79 @@ Int32 PieMenuEditorArea::Message(const BaseContainer& msg, BaseContainer& result
                         BaseContainer action(BFM_ACTION);
                         action.SetInt32(BFM_ACTION_ID, GetId());
                         SendParentMessage(action);
+                    }
+                    m_dragHoverSlot = NOTOK;
+                    Redraw();
+                }
+
+                return SetDragDestination(MOUSE_POINT_HAND);
+            }
+            else if (type == DRAGTYPE_ASSET)
+            {
+                if (hoverSlot != m_dragHoverSlot)
+                {
+                    m_dragHoverSlot = hoverSlot;
+                    Redraw();
+                }
+
+                if (msg.GetInt32(BFM_DRAG_FINISHED))
+                {
+                    const maxon::DragAndDropDataAssetArray* dndData = static_cast<const maxon::DragAndDropDataAssetArray*>(object);
+                    if (dndData && dndData->GetAssetDescriptions().GetCount() > 0)
+                    {
+                        const maxon::DndAsset& dndAsset = dndData->GetAssetDescriptions()[0];
+                        const maxon::AssetDescription& assetDesc = dndAsset.Get<0>();
+                        if (assetDesc)
+                        {
+                            PieProfile* prof = PieProfileManager::Get().GetProfile(m_profileIndex);
+                            if (prof && m_dragHoverSlot != NOTOK && m_dragHoverSlot >= 0 && (m_dragHoverSlot < prof->slotCount || m_dragHoverSlot == CENTER_SLOT_INDEX))
+                            {
+                                PieSlot& targetSlot = prof->slots[m_dragHoverSlot];
+                                maxon::String assetIdStr = assetDesc.GetId().ToString();
+                                maxon::String assetName = assetDesc.GetMetaString(maxon::OBJECT::BASE::NAME) iferr_ignore("GetMetaString");
+                                if (assetName.IsEmpty())
+                                    assetName = assetIdStr;
+
+                                Int cmdLegacyId = assetDesc.GetMetaData().Get(maxon::ASSETMETADATA::CommandLegacyId, 0) iferr_ignore("Get");
+                                if (cmdLegacyId > 0)
+                                {
+                                    targetSlot.commandId = (Int32)cmdLegacyId;
+                                    targetSlot.subMenuName = ""_s;
+                                    targetSlot.customLabel = assetName;
+                                    targetSlot.ClearToolPreset();
+                                }
+                                else
+                                {
+                                    targetSlot.toolPresetMode = ToolPresetMode::Asset;
+                                    targetSlot.toolPresetAssetId = assetIdStr;
+                                    targetSlot.toolPresetName = assetName;
+
+                                    if (targetSlot.commandId <= 0)
+                                    {
+                                        maxon::Id subTypeId = assetDesc.GetMetaData().Get(maxon::ASSETMETADATA::SubType, maxon::Id()) iferr_ignore("Get");
+                                        maxon::String subTypeStr = subTypeId.ToString();
+                                        maxon::Int underPos = NOTOK;
+                                        if (subTypeStr.FindLast('_', &underPos) && underPos != NOTOK)
+                                        {
+                                            maxon::String numStr = subTypeStr.GetRightPart(underPos + 1);
+                                            Int32 parsedCmdId = numStr.ToInt().GetValue();
+                                            if (parsedCmdId > 0)
+                                            {
+                                                targetSlot.commandId = parsedCmdId;
+                                                targetSlot.customLabel = GetCommandName(parsedCmdId);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                targetSlot.enabled = true;
+                                m_selectedSlot = m_dragHoverSlot;
+
+                                BaseContainer action(BFM_ACTION);
+                                action.SetInt32(BFM_ACTION_ID, GetId());
+                                SendParentMessage(action);
+                            }
+                        }
                     }
                     m_dragHoverSlot = NOTOK;
                     Redraw();

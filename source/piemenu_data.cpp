@@ -4,6 +4,8 @@
 #include "c4d_general.h"
 #include "c4d_libs/lib_iconcollection.h"
 #include "windows_include.h"
+#include "maxon/assets.h"
+#include "maxon/base_preset_asset.h"
 
 namespace cinema
 {
@@ -20,6 +22,7 @@ static const Int32 PIE_CONFIG_MAGIC_V10 = 0x5049453A; // "PIE:"
 static const Int32 PIE_CONFIG_MAGIC_V11 = 0x5049453B; // "PIE;"
 static const Int32 PIE_CONFIG_MAGIC_V12 = 0x5049453C; // "PIE<"
 static const Int32 PIE_CONFIG_MAGIC_V13 = 0x5049453D; // "PIE="
+static const Int32 PIE_CONFIG_MAGIC_V14 = 0x5049453E; // "PIE>"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -273,6 +276,101 @@ Bool PieSlot::GetIconBitmapForModifiers(Bool shift, Bool ctrl, Bool alt, IconDat
     return false;
 }
 
+void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const
+{
+    if (!HasToolPreset())
+        return;
+    if (!doc)
+        doc = GetActiveDocument();
+    if (!doc)
+        return;
+
+    if (executedCmd > 0 && executedCmd != commandId)
+        return;
+
+    if (toolPresetMode == ToolPresetMode::Snapshot)
+    {
+        BasePlugin* plug = FindPlugin(commandId, PLUGINTYPE::TOOL);
+        if (plug)
+        {
+            BaseContainer* toolData = GetToolData(doc, commandId, true);
+            if (toolData)
+            {
+                BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                Int32 id = 0;
+                GeData* data = nullptr;
+                while (browse.GetNext(&id, &data))
+                {
+                    if (data)
+                        toolData->SetData(id, *data);
+                }
+                EventAdd();
+            }
+        }
+        else
+        {
+            BaseObject* activeObj = doc->GetActiveObject();
+            if (activeObj)
+            {
+                BaseContainer* objData = activeObj->GetDataInstance();
+                if (objData)
+                {
+                    BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                    Int32 id = 0;
+                    GeData* data = nullptr;
+                    while (browse.GetNext(&id, &data))
+                    {
+                        if (data)
+                            objData->SetData(id, *data);
+                    }
+                    activeObj->Message(MSG_CHANGE);
+                    EventAdd();
+                }
+            }
+            else
+            {
+                BaseContainer* toolData = GetToolData(doc, commandId, false);
+                if (toolData)
+                {
+                    BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                    Int32 id = 0;
+                    GeData* data = nullptr;
+                    while (browse.GetNext(&id, &data))
+                    {
+                        if (data)
+                            toolData->SetData(id, *data);
+                    }
+                    EventAdd();
+                }
+            }
+        }
+    }
+    else if (toolPresetMode == ToolPresetMode::Asset && toolPresetAssetId.IsPopulated())
+    {
+        maxon::AssetRepositoryRef userPrefsRepo = maxon::AssetInterface::GetUserPrefsRepository();
+        if (userPrefsRepo)
+        {
+            maxon::Id aid = maxon::Id::Create(toolPresetAssetId) iferr_ignore("Create");
+            maxon::AssetDescription foundAsset;
+            userPrefsRepo.FindAssets(maxon::Id(), aid, maxon::Id(), maxon::ASSET_FIND_MODE::LATEST,
+                [&foundAsset](const maxon::AssetDescription& asset) -> maxon::Result<maxon::Bool> {
+                    foundAsset = asset;
+                    return false;
+                }) iferr_ignore("FindAsset");
+
+            if (foundAsset)
+            {
+                maxon::BasePresetAsset preset = maxon::Cast<maxon::BasePresetAsset>(foundAsset);
+                if (preset)
+                {
+                    preset.Apply() iferr_ignore("Apply");
+                    EventAdd();
+                }
+            }
+        }
+    }
+}
+
 Float PieProfile::GetSlotAngle(Int32 index) const
 {
     Int32 count = slotCount;
@@ -407,6 +505,164 @@ static maxon::String GetSlotPositionName(Int32 slotCount, Int32 index)
     }
 }
 
+static JsonValue ContainerToJson(const BaseContainer& bc)
+{
+    JsonValue arr = JsonValue::Array();
+    Int32 i = 0;
+    while (true)
+    {
+        Int32 id = bc.GetIndexId(i++);
+        if (id == NOTOK) break;
+        const GeData* dat = bc.GetDataPointer(id);
+        if (!dat) continue;
+
+        JsonValue item = JsonValue::Object();
+        item.Set("id", (int64_t)id);
+        item.Set("type", (int64_t)dat->GetType());
+        switch (dat->GetType())
+        {
+            case DA_LONG:
+                item.Set("val", (int64_t)dat->GetInt32());
+                arr.Push(item);
+                break;
+            case DA_LLONG:
+                item.Set("val", (int64_t)dat->GetInt64());
+                arr.Push(item);
+                break;
+            case DA_REAL:
+                item.Set("val", (double)dat->GetFloat());
+                arr.Push(item);
+                break;
+            case DA_STRING:
+                item.Set("val", C4DStringToStdString(dat->GetString()));
+                arr.Push(item);
+                break;
+            case DA_VECTOR:
+            {
+                Vector v = dat->GetVector();
+                JsonValue jv = JsonValue::Array();
+                jv.Push(v.x); jv.Push(v.y); jv.Push(v.z);
+                item.Set("val", jv);
+                arr.Push(item);
+                break;
+            }
+            case DA_CONTAINER:
+            {
+                const BaseContainer* subBc = dat->GetContainer();
+                if (subBc)
+                {
+                    item.Set("val", ContainerToJson(*subBc));
+                    arr.Push(item);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+    return arr;
+}
+
+static void JsonToContainer(const JsonValue& jArr, BaseContainer& outBc)
+{
+    outBc.FlushAll();
+    if (!jArr.IsArray()) return;
+    for (const JsonValue& item : jArr.arrVal)
+    {
+        if (!item.IsObject()) continue;
+        Int32 id = (Int32)item.GetInt("id", NOTOK);
+        Int32 type = (Int32)item.GetInt("type", DA_NIL);
+        if (id == NOTOK) continue;
+        switch (type)
+        {
+            case DA_LONG:
+                outBc.SetInt32(id, (Int32)item.GetInt("val", 0));
+                break;
+            case DA_LLONG:
+                outBc.SetInt64(id, (Int64)item.GetInt("val", 0));
+                break;
+            case DA_REAL:
+                outBc.SetFloat(id, (Float)item.GetNumber("val", 0.0));
+                break;
+            case DA_STRING:
+                outBc.SetString(id, StdStringToC4DString(item.GetString("val", "")));
+                break;
+            case DA_VECTOR:
+            {
+                const std::vector<JsonValue>* arrV = item.GetArray("val");
+                if (arrV && arrV->size() >= 3)
+                {
+                    outBc.SetVector(id, Vector((*arrV)[0].numVal, (*arrV)[1].numVal, (*arrV)[2].numVal));
+                }
+                break;
+            }
+            case DA_CONTAINER:
+            {
+                const JsonValue* subJ = item.Find("val");
+                if (subJ && subJ->IsArray())
+                {
+                    BaseContainer subBc;
+                    JsonToContainer(*subJ, subBc);
+                    outBc.SetContainer(id, subBc);
+                }
+                break;
+            }
+            default:
+                break;
+        }
+    }
+}
+
+static JsonValue SlotToJson(const PieSlot& slot, Int32 slotIndex, const maxon::String& posName)
+{
+    JsonValue jSlot = JsonValue::Object();
+    jSlot.Set("index", (int64_t)slotIndex);
+    jSlot.Set("position", C4DStringToStdString(posName));
+    jSlot.Set("commandId", (int64_t)slot.commandId);
+    if (slot.subMenuName.IsPopulated())
+        jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
+    if (slot.commandId > 0)
+    {
+        String cname = GetCommandName(slot.commandId);
+        if (cname.IsPopulated())
+            jSlot.Set("commandName", C4DStringToStdString(cname));
+    }
+    if (slot.customLabel.IsPopulated())
+        jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
+    if (slot.shiftCommandId > 0)
+        jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
+    if (slot.ctrlCommandId > 0)
+        jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
+    if (slot.altCommandId > 0)
+        jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
+
+    JsonValue jCol = JsonValue::Array();
+    jCol.Push(slot.accentColor.x);
+    jCol.Push(slot.accentColor.y);
+    jCol.Push(slot.accentColor.z);
+    jSlot.Set("accentColor", jCol);
+
+    jSlot.Set("enabled", (bool)slot.enabled);
+
+    if (slot.toolPresetMode == ToolPresetMode::Snapshot)
+    {
+        jSlot.Set("toolPresetMode", "snapshot");
+        if (slot.toolPresetName.IsPopulated())
+            jSlot.Set("toolPresetName", C4DStringToStdString(slot.toolPresetName));
+        jSlot.Set("toolSettings", ContainerToJson(slot.toolSettings));
+    }
+    else if (slot.toolPresetMode == ToolPresetMode::Asset)
+    {
+        jSlot.Set("toolPresetMode", "asset");
+        if (slot.toolPresetName.IsPopulated())
+            jSlot.Set("toolPresetName", C4DStringToStdString(slot.toolPresetName));
+        if (slot.toolPresetAssetId.IsPopulated())
+            jSlot.Set("toolPresetAssetId", C4DStringToStdString(slot.toolPresetAssetId));
+    }
+
+    return jSlot;
+}
+
 static JsonValue ProfileToJson(const PieProfile& prof)
 {
     JsonValue j = JsonValue::Object();
@@ -439,71 +695,11 @@ static JsonValue ProfileToJson(const PieProfile& prof)
     JsonValue jSlots = JsonValue::Array();
     for (Int32 s = 0; s < prof.slotCount; ++s)
     {
-        const PieSlot& slot = prof.slots[s];
-        JsonValue jSlot = JsonValue::Object();
-        jSlot.Set("index", (int64_t)s);
-        jSlot.Set("position", C4DStringToStdString(GetSlotPositionName(prof.slotCount, s)));
-        jSlot.Set("commandId", (int64_t)slot.commandId);
-        if (slot.subMenuName.IsPopulated())
-            jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
-        if (slot.commandId > 0)
-        {
-            String cname = GetCommandName(slot.commandId);
-            if (cname.IsPopulated())
-                jSlot.Set("commandName", C4DStringToStdString(cname));
-        }
-        if (slot.customLabel.IsPopulated())
-            jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
-        if (slot.shiftCommandId > 0)
-            jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
-        if (slot.ctrlCommandId > 0)
-            jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
-        if (slot.altCommandId > 0)
-            jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
-
-        JsonValue jCol = JsonValue::Array();
-        jCol.Push(slot.accentColor.x);
-        jCol.Push(slot.accentColor.y);
-        jCol.Push(slot.accentColor.z);
-        jSlot.Set("accentColor", jCol);
-
-        jSlot.Set("enabled", (bool)slot.enabled);
-        jSlots.Push(jSlot);
+        jSlots.Push(SlotToJson(prof.slots[s], s, GetSlotPositionName(prof.slotCount, s)));
     }
 
     // Center Hub
-    {
-        const PieSlot& slot = prof.slots[CENTER_SLOT_INDEX];
-        JsonValue jSlot = JsonValue::Object();
-        jSlot.Set("index", (int64_t)CENTER_SLOT_INDEX);
-        jSlot.Set("position", "Center");
-        jSlot.Set("commandId", (int64_t)slot.commandId);
-        if (slot.subMenuName.IsPopulated())
-            jSlot.Set("subMenuName", C4DStringToStdString(slot.subMenuName));
-        if (slot.commandId > 0)
-        {
-            String cname = GetCommandName(slot.commandId);
-            if (cname.IsPopulated())
-                jSlot.Set("commandName", C4DStringToStdString(cname));
-        }
-        if (slot.customLabel.IsPopulated())
-            jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
-        if (slot.shiftCommandId > 0)
-            jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
-        if (slot.ctrlCommandId > 0)
-            jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
-        if (slot.altCommandId > 0)
-            jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
-
-        JsonValue jCol = JsonValue::Array();
-        jCol.Push(slot.accentColor.x);
-        jCol.Push(slot.accentColor.y);
-        jCol.Push(slot.accentColor.z);
-        jSlot.Set("accentColor", jCol);
-
-        jSlot.Set("enabled", (bool)slot.enabled);
-        jSlots.Push(jSlot);
-    }
+    jSlots.Push(SlotToJson(prof.slots[CENTER_SLOT_INDEX], CENTER_SLOT_INDEX, "Center"_s));
     j.Set("slots", jSlots);
 
     return j;
@@ -589,6 +785,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
         outProf.slots[s].customLabel = ""_s;
         outProf.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
         outProf.slots[s].enabled = true;
+        outProf.slots[s].ClearToolPreset();
     }
 
     const std::vector<JsonValue>* arrSlots = jProf.GetArray("slots");
@@ -627,6 +824,29 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
                         (*arrCol)[2].numVal
                     );
                 }
+
+                std::string pModeStr = jSlot.GetString("toolPresetMode", "");
+                if (pModeStr == "snapshot")
+                {
+                    outProf.slots[idx].toolPresetMode = ToolPresetMode::Snapshot;
+                    outProf.slots[idx].toolPresetName = StdStringToC4DString(jSlot.GetString("toolPresetName", ""));
+                    const JsonValue* jSet = jSlot.Find("toolSettings");
+                    if (jSet && jSet->IsArray())
+                    {
+                        JsonToContainer(*jSet, outProf.slots[idx].toolSettings);
+                    }
+                }
+                else if (pModeStr == "asset")
+                {
+                    outProf.slots[idx].toolPresetMode = ToolPresetMode::Asset;
+                    outProf.slots[idx].toolPresetName = StdStringToC4DString(jSlot.GetString("toolPresetName", ""));
+                    outProf.slots[idx].toolPresetAssetId = StdStringToC4DString(jSlot.GetString("toolPresetAssetId", ""));
+                    outProf.slots[idx].toolSettings.FlushAll();
+                }
+                else
+                {
+                    outProf.slots[idx].ClearToolPreset();
+                }
             }
         }
     }
@@ -646,7 +866,13 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V13)
+    if (firstVal == PIE_CONFIG_MAGIC_V14)
+    {
+        version = 14;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V13)
     {
         version = 13;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -747,9 +973,41 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.slots[s].customLabel = ""_s;
             prof.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
             prof.slots[s].enabled = true;
+            prof.slots[s].ClearToolPreset();
         }
 
-        if (version >= 8)
+        if (version >= 14)
+        {
+            for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
+            {
+                file->ReadInt32(&prof.slots[s].commandId);
+                file->ReadString(&prof.slots[s].customLabel);
+                file->ReadVector64(&prof.slots[s].accentColor);
+                file->ReadBool(&prof.slots[s].enabled);
+                file->ReadString(&prof.slots[s].subMenuName);
+                file->ReadInt32(&prof.slots[s].shiftCommandId);
+                file->ReadInt32(&prof.slots[s].ctrlCommandId);
+                file->ReadInt32(&prof.slots[s].altCommandId);
+
+                Int32 pMode = 0;
+                file->ReadInt32(&pMode);
+                prof.slots[s].toolPresetMode = (ToolPresetMode)pMode;
+                file->ReadString(&prof.slots[s].toolPresetName);
+                file->ReadString(&prof.slots[s].toolPresetAssetId);
+                String sJson;
+                file->ReadString(&sJson);
+                if (prof.slots[s].toolPresetMode == ToolPresetMode::Snapshot && sJson.IsPopulated())
+                {
+                    JsonValue jVal;
+                    std::string err;
+                    if (JsonValue::Parse(C4DStringToStdString(sJson), jVal, err))
+                    {
+                        JsonToContainer(jVal, prof.slots[s].toolSettings);
+                    }
+                }
+            }
+        }
+        else if (version >= 8)
         {
             for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
             {
@@ -1375,8 +1633,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V13 header to denote showItemName support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V13);
+    // Write magic V14 header to denote tool preset support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V14);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1398,6 +1656,20 @@ Bool PieProfileManager::SaveToFile()
             file->WriteInt32(prof.slots[s].shiftCommandId);
             file->WriteInt32(prof.slots[s].ctrlCommandId);
             file->WriteInt32(prof.slots[s].altCommandId);
+
+            // V14: Tool preset
+            file->WriteInt32((Int32)prof.slots[s].toolPresetMode);
+            file->WriteString(prof.slots[s].toolPresetName);
+            file->WriteString(prof.slots[s].toolPresetAssetId);
+            if (prof.slots[s].toolPresetMode == ToolPresetMode::Snapshot)
+            {
+                std::string sJson = ContainerToJson(prof.slots[s].toolSettings).Dump(0);
+                file->WriteString(StdStringToC4DString(sJson));
+            }
+            else
+            {
+                file->WriteString(""_s);
+            }
         }
 
         file->WriteBool(prof.hotkey.enabled);

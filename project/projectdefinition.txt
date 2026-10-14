@@ -2,7 +2,8 @@ Platform=Win64
 Type=DLL
 APIS=\
 cinema.framework;\
-core.framework
+core.framework;\
+asset.framework
 
 C4D=true
 stylecheck.level=0 
