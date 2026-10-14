@@ -11,14 +11,14 @@
 
 ## Features
 
-- **⚡ Zero-Latency HUD (Press & Flick)**: Instantaneous transparent overlay. Hold your hotkey, flick towards a slot, and release to execute. Supports click confirmation, center hub commands, and smart typing detection that ignores hotkeys while renaming or editing values.
-- **🎯 Context-Aware Profiles**: Automatically activates relevant menus based on the current mode (**Global**, **Polygons**, **Edges**, **Points**, **Objects**, **UV**), with per-menu hotkeys and intelligent conflict resolution.
-- **📂 Nested Submenus**: Multi-level menus with zero-delay hover expansion, breadcrumb path display, and fast navigation (`Backspace`, RMB, or Center Hub to go back).
-- **⌨️ Modifier Actions & Native Behaviors**: 
+- **Zero-Latency HUD (Press & Flick)**: Instantaneous transparent overlay. Hold your hotkey, flick towards a slot, and release to execute. Supports click confirmation, center hub commands, and smart typing detection that ignores hotkeys while renaming or editing values.
+- **Context-Aware Profiles**: Automatically activates relevant menus based on the current mode (**Global**, **Polygons**, **Edges**, **Points**, **Objects**, **UV**), with per-menu hotkeys and intelligent conflict resolution.
+- **Nested Submenus**: Multi-level menus with zero-delay hover expansion, breadcrumb path display, and fast navigation (`Backspace`, RMB, or Center Hub to go back).
+- **Modifier Actions & Native Behaviors**: 
   - Native Cinema 4D modifiers: **Alt** (parent under new generator), **Shift** (child deformer or open tool options), **Ctrl** (spawn at world origin).
   - Custom command overrides for `Shift`, `Ctrl`, and `Alt` on any slot, with live HUD badge feedback.
-- **💾 Tool Presets & Snapshots**: Capture active tool or generator settings as instant **Snapshots** or apply saved asset presets on execution for main and modifier actions.
-- **🎨 Visual Profile Editor (`Extensions -> Pie Menu Configuration`)**:
+- **Tool Presets & Snapshots**: Capture active tool or generator settings as instant **Snapshots** or apply saved asset presets on execution for main and modifier actions.
+- **Visual Profile Editor (`Extensions -> Pie Menu Configuration`)**:
   - **Drag & Drop**: Drag commands and submenus directly onto radial slots, modifier rows, or swap slots on canvas (`Ctrl+Drag` to duplicate).
   - **Command Library**: Live search through all Cinema 4D commands by name, numeric ID, or keyboard shortcut.
   - **Per-Menu Customization**: Set slot count (2–24), background color (`BG Color`), display style (*Icon & Label*, *Icon Only*, *Label Only*), icon size (12–64px), independent inner/outer radii, opacity, and pin/stay-open behavior.
