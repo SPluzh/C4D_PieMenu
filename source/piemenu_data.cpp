@@ -23,6 +23,8 @@ static const Int32 PIE_CONFIG_MAGIC_V11 = 0x5049453B; // "PIE;"
 static const Int32 PIE_CONFIG_MAGIC_V12 = 0x5049453C; // "PIE<"
 static const Int32 PIE_CONFIG_MAGIC_V13 = 0x5049453D; // "PIE="
 static const Int32 PIE_CONFIG_MAGIC_V14 = 0x5049453E; // "PIE>"
+static const Int32 PIE_CONFIG_MAGIC_V15 = 0x5049453F; // "PIE?"
+static const Int32 PIE_CONFIG_MAGIC_V16 = 0x50494540; // "PIE@"
 
 maxon::String GetContextName(PieContextMode ctx)
 {
@@ -255,13 +257,17 @@ Bool PieSlot::GetIconBitmap(IconData& outIcon) const
 
 maxon::String PieSlot::GetEffectiveTitleForModifiers(Bool shift, Bool ctrl, Bool alt) const
 {
-    Int32 cmd = GetCommandForModifiers(shift, ctrl, alt);
-    if (cmd > 0 && cmd != commandId)
+    if (shift && shiftCommandId > 0)
     {
-        String name = GetCommandName(cmd);
-        if (name.IsPopulated())
-            return name;
-        return FormatString("Cmd @"_s, cmd);
+        return GetEffectiveShiftTitle();
+    }
+    if (ctrl && ctrlCommandId > 0)
+    {
+        return GetEffectiveCtrlTitle();
+    }
+    if (alt && altCommandId > 0)
+    {
+        return GetEffectiveAltTitle();
     }
     return GetEffectiveTitle();
 }
@@ -276,27 +282,91 @@ Bool PieSlot::GetIconBitmapForModifiers(Bool shift, Bool ctrl, Bool alt, IconDat
     return false;
 }
 
-void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const
+void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd, Bool shift, Bool ctrl, Bool alt) const
 {
-    if (!HasToolPreset())
-        return;
     if (!doc)
         doc = GetActiveDocument();
     if (!doc)
         return;
 
-    if (executedCmd > 0 && executedCmd != commandId)
+    Int32 expectedCmd = commandId;
+    ToolPresetMode targetMode = ToolPresetMode::None;
+    const maxon::String* targetAssetId = nullptr;
+    const BaseContainer* targetSettings = nullptr;
+
+    if (shift)
+    {
+        expectedCmd = (shiftCommandId > 0) ? shiftCommandId : commandId;
+        if (shiftPresetMode != ToolPresetMode::None)
+        {
+            targetMode = shiftPresetMode;
+            targetAssetId = &shiftPresetAssetId;
+            targetSettings = &shiftSettings;
+        }
+        else if (shiftCommandId <= 0 && toolPresetMode != ToolPresetMode::None)
+        {
+            targetMode = toolPresetMode;
+            targetAssetId = &toolPresetAssetId;
+            targetSettings = &toolSettings;
+        }
+    }
+    else if (ctrl)
+    {
+        expectedCmd = (ctrlCommandId > 0) ? ctrlCommandId : commandId;
+        if (ctrlPresetMode != ToolPresetMode::None)
+        {
+            targetMode = ctrlPresetMode;
+            targetAssetId = &ctrlPresetAssetId;
+            targetSettings = &ctrlSettings;
+        }
+        else if (ctrlCommandId <= 0 && toolPresetMode != ToolPresetMode::None)
+        {
+            targetMode = toolPresetMode;
+            targetAssetId = &toolPresetAssetId;
+            targetSettings = &toolSettings;
+        }
+    }
+    else if (alt)
+    {
+        expectedCmd = (altCommandId > 0) ? altCommandId : commandId;
+        if (altPresetMode != ToolPresetMode::None)
+        {
+            targetMode = altPresetMode;
+            targetAssetId = &altPresetAssetId;
+            targetSettings = &altSettings;
+        }
+        else if (altCommandId <= 0 && toolPresetMode != ToolPresetMode::None)
+        {
+            targetMode = toolPresetMode;
+            targetAssetId = &toolPresetAssetId;
+            targetSettings = &toolSettings;
+        }
+    }
+    else
+    {
+        expectedCmd = commandId;
+        targetMode = toolPresetMode;
+        targetAssetId = &toolPresetAssetId;
+        targetSettings = &toolSettings;
+    }
+
+    if (targetMode == ToolPresetMode::None)
         return;
 
-    if (toolPresetMode == ToolPresetMode::Snapshot)
+    if (executedCmd > 0 && executedCmd != expectedCmd)
+        return;
+
+    Int32 activeCmdId = (executedCmd > 0) ? executedCmd : expectedCmd;
+
+    if (targetMode == ToolPresetMode::Snapshot && targetSettings)
     {
-        BasePlugin* plug = FindPlugin(commandId, PLUGINTYPE::TOOL);
+        BasePlugin* plug = FindPlugin(activeCmdId, PLUGINTYPE::TOOL);
         if (plug)
         {
-            BaseContainer* toolData = GetToolData(doc, commandId, true);
+            BaseContainer* toolData = GetToolData(doc, activeCmdId, true);
             if (toolData)
             {
-                BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                BrowseContainer browse(const_cast<BaseContainer*>(targetSettings));
                 Int32 id = 0;
                 GeData* data = nullptr;
                 while (browse.GetNext(&id, &data))
@@ -315,7 +385,7 @@ void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const
                 BaseContainer* objData = activeObj->GetDataInstance();
                 if (objData)
                 {
-                    BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                    BrowseContainer browse(const_cast<BaseContainer*>(targetSettings));
                     Int32 id = 0;
                     GeData* data = nullptr;
                     while (browse.GetNext(&id, &data))
@@ -329,10 +399,10 @@ void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const
             }
             else
             {
-                BaseContainer* toolData = GetToolData(doc, commandId, false);
+                BaseContainer* toolData = GetToolData(doc, activeCmdId, false);
                 if (toolData)
                 {
-                    BrowseContainer browse(const_cast<BaseContainer*>(&toolSettings));
+                    BrowseContainer browse(const_cast<BaseContainer*>(targetSettings));
                     Int32 id = 0;
                     GeData* data = nullptr;
                     while (browse.GetNext(&id, &data))
@@ -345,12 +415,12 @@ void PieSlot::ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const
             }
         }
     }
-    else if (toolPresetMode == ToolPresetMode::Asset && toolPresetAssetId.IsPopulated())
+    else if (targetMode == ToolPresetMode::Asset && targetAssetId && targetAssetId->IsPopulated())
     {
         maxon::AssetRepositoryRef userPrefsRepo = maxon::AssetInterface::GetUserPrefsRepository();
         if (userPrefsRepo)
         {
-            maxon::Id aid = maxon::Id::Create(toolPresetAssetId) iferr_ignore("Create");
+            maxon::Id aid = maxon::Id::Create(*targetAssetId) iferr_ignore("Create");
             maxon::AssetDescription foundAsset;
             userPrefsRepo.FindAssets(maxon::Id(), aid, maxon::Id(), maxon::ASSET_FIND_MODE::LATEST,
                 [&foundAsset](const maxon::AssetDescription& asset) -> maxon::Result<maxon::Bool> {
@@ -631,10 +701,16 @@ static JsonValue SlotToJson(const PieSlot& slot, Int32 slotIndex, const maxon::S
         jSlot.Set("customLabel", C4DStringToStdString(slot.customLabel));
     if (slot.shiftCommandId > 0)
         jSlot.Set("shiftCommandId", (int64_t)slot.shiftCommandId);
+    if (slot.shiftCustomLabel.IsPopulated())
+        jSlot.Set("shiftCustomLabel", C4DStringToStdString(slot.shiftCustomLabel));
     if (slot.ctrlCommandId > 0)
         jSlot.Set("ctrlCommandId", (int64_t)slot.ctrlCommandId);
+    if (slot.ctrlCustomLabel.IsPopulated())
+        jSlot.Set("ctrlCustomLabel", C4DStringToStdString(slot.ctrlCustomLabel));
     if (slot.altCommandId > 0)
         jSlot.Set("altCommandId", (int64_t)slot.altCommandId);
+    if (slot.altCustomLabel.IsPopulated())
+        jSlot.Set("altCustomLabel", C4DStringToStdString(slot.altCustomLabel));
 
     JsonValue jCol = JsonValue::Array();
     jCol.Push(slot.accentColor.x);
@@ -658,6 +734,57 @@ static JsonValue SlotToJson(const PieSlot& slot, Int32 slotIndex, const maxon::S
             jSlot.Set("toolPresetName", C4DStringToStdString(slot.toolPresetName));
         if (slot.toolPresetAssetId.IsPopulated())
             jSlot.Set("toolPresetAssetId", C4DStringToStdString(slot.toolPresetAssetId));
+    }
+
+    // Shift preset
+    if (slot.shiftPresetMode == ToolPresetMode::Snapshot)
+    {
+        jSlot.Set("shiftPresetMode", "snapshot");
+        if (slot.shiftPresetName.IsPopulated())
+            jSlot.Set("shiftPresetName", C4DStringToStdString(slot.shiftPresetName));
+        jSlot.Set("shiftSettings", ContainerToJson(slot.shiftSettings));
+    }
+    else if (slot.shiftPresetMode == ToolPresetMode::Asset)
+    {
+        jSlot.Set("shiftPresetMode", "asset");
+        if (slot.shiftPresetName.IsPopulated())
+            jSlot.Set("shiftPresetName", C4DStringToStdString(slot.shiftPresetName));
+        if (slot.shiftPresetAssetId.IsPopulated())
+            jSlot.Set("shiftPresetAssetId", C4DStringToStdString(slot.shiftPresetAssetId));
+    }
+
+    // Ctrl preset
+    if (slot.ctrlPresetMode == ToolPresetMode::Snapshot)
+    {
+        jSlot.Set("ctrlPresetMode", "snapshot");
+        if (slot.ctrlPresetName.IsPopulated())
+            jSlot.Set("ctrlPresetName", C4DStringToStdString(slot.ctrlPresetName));
+        jSlot.Set("ctrlSettings", ContainerToJson(slot.ctrlSettings));
+    }
+    else if (slot.ctrlPresetMode == ToolPresetMode::Asset)
+    {
+        jSlot.Set("ctrlPresetMode", "asset");
+        if (slot.ctrlPresetName.IsPopulated())
+            jSlot.Set("ctrlPresetName", C4DStringToStdString(slot.ctrlPresetName));
+        if (slot.ctrlPresetAssetId.IsPopulated())
+            jSlot.Set("ctrlPresetAssetId", C4DStringToStdString(slot.ctrlPresetAssetId));
+    }
+
+    // Alt preset
+    if (slot.altPresetMode == ToolPresetMode::Snapshot)
+    {
+        jSlot.Set("altPresetMode", "snapshot");
+        if (slot.altPresetName.IsPopulated())
+            jSlot.Set("altPresetName", C4DStringToStdString(slot.altPresetName));
+        jSlot.Set("altSettings", ContainerToJson(slot.altSettings));
+    }
+    else if (slot.altPresetMode == ToolPresetMode::Asset)
+    {
+        jSlot.Set("altPresetMode", "asset");
+        if (slot.altPresetName.IsPopulated())
+            jSlot.Set("altPresetName", C4DStringToStdString(slot.altPresetName));
+        if (slot.altPresetAssetId.IsPopulated())
+            jSlot.Set("altPresetAssetId", C4DStringToStdString(slot.altPresetAssetId));
     }
 
     return jSlot;
@@ -785,7 +912,7 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
         outProf.slots[s].customLabel = ""_s;
         outProf.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
         outProf.slots[s].enabled = true;
-        outProf.slots[s].ClearToolPreset();
+        outProf.slots[s].ClearAllPresets();
     }
 
     const std::vector<JsonValue>* arrSlots = jProf.GetArray("slots");
@@ -807,8 +934,11 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
             {
                 outProf.slots[idx].commandId = (Int32)jSlot.GetInt("commandId", NOTOK);
                 outProf.slots[idx].shiftCommandId = (Int32)jSlot.GetInt("shiftCommandId", NOTOK);
+                outProf.slots[idx].shiftCustomLabel = StdStringToC4DString(jSlot.GetString("shiftCustomLabel", ""));
                 outProf.slots[idx].ctrlCommandId = (Int32)jSlot.GetInt("ctrlCommandId", NOTOK);
+                outProf.slots[idx].ctrlCustomLabel = StdStringToC4DString(jSlot.GetString("ctrlCustomLabel", ""));
                 outProf.slots[idx].altCommandId = (Int32)jSlot.GetInt("altCommandId", NOTOK);
+                outProf.slots[idx].altCustomLabel = StdStringToC4DString(jSlot.GetString("altCustomLabel", ""));
                 std::string sub = jSlot.GetString("subMenuName", "");
                 outProf.slots[idx].subMenuName = StdStringToC4DString(sub);
                 std::string lbl = jSlot.GetString("customLabel", "");
@@ -847,6 +977,78 @@ static Bool ProfileFromJson(const JsonValue& jProf, PieProfile& outProf)
                 {
                     outProf.slots[idx].ClearToolPreset();
                 }
+
+                // Shift preset
+                std::string sModeStr = jSlot.GetString("shiftPresetMode", "");
+                if (sModeStr == "snapshot")
+                {
+                    outProf.slots[idx].shiftPresetMode = ToolPresetMode::Snapshot;
+                    outProf.slots[idx].shiftPresetName = StdStringToC4DString(jSlot.GetString("shiftPresetName", ""));
+                    const JsonValue* jSet = jSlot.Find("shiftSettings");
+                    if (jSet && jSet->IsArray())
+                    {
+                        JsonToContainer(*jSet, outProf.slots[idx].shiftSettings);
+                    }
+                }
+                else if (sModeStr == "asset")
+                {
+                    outProf.slots[idx].shiftPresetMode = ToolPresetMode::Asset;
+                    outProf.slots[idx].shiftPresetName = StdStringToC4DString(jSlot.GetString("shiftPresetName", ""));
+                    outProf.slots[idx].shiftPresetAssetId = StdStringToC4DString(jSlot.GetString("shiftPresetAssetId", ""));
+                    outProf.slots[idx].shiftSettings.FlushAll();
+                }
+                else
+                {
+                    outProf.slots[idx].ClearShiftPreset();
+                }
+
+                // Ctrl preset
+                std::string cModeStr = jSlot.GetString("ctrlPresetMode", "");
+                if (cModeStr == "snapshot")
+                {
+                    outProf.slots[idx].ctrlPresetMode = ToolPresetMode::Snapshot;
+                    outProf.slots[idx].ctrlPresetName = StdStringToC4DString(jSlot.GetString("ctrlPresetName", ""));
+                    const JsonValue* jSet = jSlot.Find("ctrlSettings");
+                    if (jSet && jSet->IsArray())
+                    {
+                        JsonToContainer(*jSet, outProf.slots[idx].ctrlSettings);
+                    }
+                }
+                else if (cModeStr == "asset")
+                {
+                    outProf.slots[idx].ctrlPresetMode = ToolPresetMode::Asset;
+                    outProf.slots[idx].ctrlPresetName = StdStringToC4DString(jSlot.GetString("ctrlPresetName", ""));
+                    outProf.slots[idx].ctrlPresetAssetId = StdStringToC4DString(jSlot.GetString("ctrlPresetAssetId", ""));
+                    outProf.slots[idx].ctrlSettings.FlushAll();
+                }
+                else
+                {
+                    outProf.slots[idx].ClearCtrlPreset();
+                }
+
+                // Alt preset
+                std::string aModeStr = jSlot.GetString("altPresetMode", "");
+                if (aModeStr == "snapshot")
+                {
+                    outProf.slots[idx].altPresetMode = ToolPresetMode::Snapshot;
+                    outProf.slots[idx].altPresetName = StdStringToC4DString(jSlot.GetString("altPresetName", ""));
+                    const JsonValue* jSet = jSlot.Find("altSettings");
+                    if (jSet && jSet->IsArray())
+                    {
+                        JsonToContainer(*jSet, outProf.slots[idx].altSettings);
+                    }
+                }
+                else if (aModeStr == "asset")
+                {
+                    outProf.slots[idx].altPresetMode = ToolPresetMode::Asset;
+                    outProf.slots[idx].altPresetName = StdStringToC4DString(jSlot.GetString("altPresetName", ""));
+                    outProf.slots[idx].altPresetAssetId = StdStringToC4DString(jSlot.GetString("altPresetAssetId", ""));
+                    outProf.slots[idx].altSettings.FlushAll();
+                }
+                else
+                {
+                    outProf.slots[idx].ClearAltPreset();
+                }
             }
         }
     }
@@ -866,7 +1068,19 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
     Int32 profileCount = 0;
     Int32 version = 1;
 
-    if (firstVal == PIE_CONFIG_MAGIC_V14)
+    if (firstVal == PIE_CONFIG_MAGIC_V16)
+    {
+        version = 16;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V15)
+    {
+        version = 15;
+        if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
+            return false;
+    }
+    else if (firstVal == PIE_CONFIG_MAGIC_V14)
     {
         version = 14;
         if (!file->ReadInt32(&profileCount) || profileCount < 0 || profileCount > 1000)
@@ -973,10 +1187,94 @@ static Bool ReadProfilesFromBinaryFile(BaseFile* file, maxon::BaseArray<PieProfi
             prof.slots[s].customLabel = ""_s;
             prof.slots[s].accentColor = Vector(0.25, 0.65, 1.0);
             prof.slots[s].enabled = true;
-            prof.slots[s].ClearToolPreset();
+            prof.slots[s].ClearAllPresets();
         }
 
-        if (version >= 14)
+        if (version >= 15)
+        {
+            for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
+            {
+                file->ReadInt32(&prof.slots[s].commandId);
+                file->ReadString(&prof.slots[s].customLabel);
+                file->ReadVector64(&prof.slots[s].accentColor);
+                file->ReadBool(&prof.slots[s].enabled);
+                file->ReadString(&prof.slots[s].subMenuName);
+                file->ReadInt32(&prof.slots[s].shiftCommandId);
+                file->ReadInt32(&prof.slots[s].ctrlCommandId);
+                file->ReadInt32(&prof.slots[s].altCommandId);
+                if (version >= 16)
+                {
+                    file->ReadString(&prof.slots[s].shiftCustomLabel);
+                    file->ReadString(&prof.slots[s].ctrlCustomLabel);
+                    file->ReadString(&prof.slots[s].altCustomLabel);
+                }
+
+                // Main preset
+                Int32 pMode = 0;
+                file->ReadInt32(&pMode);
+                prof.slots[s].toolPresetMode = (ToolPresetMode)pMode;
+                file->ReadString(&prof.slots[s].toolPresetName);
+                file->ReadString(&prof.slots[s].toolPresetAssetId);
+                String sJson;
+                file->ReadString(&sJson);
+                if (prof.slots[s].toolPresetMode == ToolPresetMode::Snapshot && sJson.IsPopulated())
+                {
+                    JsonValue jVal;
+                    std::string err;
+                    if (JsonValue::Parse(C4DStringToStdString(sJson), jVal, err))
+                        JsonToContainer(jVal, prof.slots[s].toolSettings);
+                }
+
+                // Shift preset
+                Int32 sPMode = 0;
+                file->ReadInt32(&sPMode);
+                prof.slots[s].shiftPresetMode = (ToolPresetMode)sPMode;
+                file->ReadString(&prof.slots[s].shiftPresetName);
+                file->ReadString(&prof.slots[s].shiftPresetAssetId);
+                String sShiftJson;
+                file->ReadString(&sShiftJson);
+                if (prof.slots[s].shiftPresetMode == ToolPresetMode::Snapshot && sShiftJson.IsPopulated())
+                {
+                    JsonValue jVal;
+                    std::string err;
+                    if (JsonValue::Parse(C4DStringToStdString(sShiftJson), jVal, err))
+                        JsonToContainer(jVal, prof.slots[s].shiftSettings);
+                }
+
+                // Ctrl preset
+                Int32 cPMode = 0;
+                file->ReadInt32(&cPMode);
+                prof.slots[s].ctrlPresetMode = (ToolPresetMode)cPMode;
+                file->ReadString(&prof.slots[s].ctrlPresetName);
+                file->ReadString(&prof.slots[s].ctrlPresetAssetId);
+                String sCtrlJson;
+                file->ReadString(&sCtrlJson);
+                if (prof.slots[s].ctrlPresetMode == ToolPresetMode::Snapshot && sCtrlJson.IsPopulated())
+                {
+                    JsonValue jVal;
+                    std::string err;
+                    if (JsonValue::Parse(C4DStringToStdString(sCtrlJson), jVal, err))
+                        JsonToContainer(jVal, prof.slots[s].ctrlSettings);
+                }
+
+                // Alt preset
+                Int32 aPMode = 0;
+                file->ReadInt32(&aPMode);
+                prof.slots[s].altPresetMode = (ToolPresetMode)aPMode;
+                file->ReadString(&prof.slots[s].altPresetName);
+                file->ReadString(&prof.slots[s].altPresetAssetId);
+                String sAltJson;
+                file->ReadString(&sAltJson);
+                if (prof.slots[s].altPresetMode == ToolPresetMode::Snapshot && sAltJson.IsPopulated())
+                {
+                    JsonValue jVal;
+                    std::string err;
+                    if (JsonValue::Parse(C4DStringToStdString(sAltJson), jVal, err))
+                        JsonToContainer(jVal, prof.slots[s].altSettings);
+                }
+            }
+        }
+        else if (version >= 14)
         {
             for (Int32 s = 0; s < TOTAL_SLOT_COUNT; ++s)
             {
@@ -1361,7 +1659,7 @@ Bool PieProfileManager::InspectImportFile(const Filename& path, Int32& outProfil
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             maxon::BaseArray<PieProfile> tempProfiles;
@@ -1463,7 +1761,7 @@ Bool PieProfileManager::ImportSettingsFromFile(const Filename& path, Bool replac
     Int32 firstVal = 0;
     if (file->ReadInt32(&firstVal))
     {
-        if (firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
+        if (firstVal == PIE_CONFIG_MAGIC_V16 || firstVal == PIE_CONFIG_MAGIC_V15 || firstVal == PIE_CONFIG_MAGIC_V14 || firstVal == PIE_CONFIG_MAGIC_V13 || firstVal == PIE_CONFIG_MAGIC_V12 || firstVal == PIE_CONFIG_MAGIC_V11 || firstVal == PIE_CONFIG_MAGIC_V10 || firstVal == PIE_CONFIG_MAGIC_V9 || firstVal == PIE_CONFIG_MAGIC_V8 || firstVal == PIE_CONFIG_MAGIC_V7 || firstVal == PIE_CONFIG_MAGIC_V6 || firstVal == PIE_CONFIG_MAGIC_V5 || firstVal == PIE_CONFIG_MAGIC_V4 || firstVal == PIE_CONFIG_MAGIC_V3 || firstVal == PIE_CONFIG_MAGIC_V2 || (firstVal > 0 && firstVal <= 1000))
         {
             file->Seek(0, FILESEEK::START);
             Float dummyRadius = m_radius;
@@ -1633,8 +1931,8 @@ Bool PieProfileManager::SaveToFile()
     if (!file || !file->Open(path, FILEOPEN::WRITE))
         return false;
 
-    // Write magic V14 header to denote tool preset support
-    file->WriteInt32(PIE_CONFIG_MAGIC_V14);
+    // Write magic V16 header to denote modifier custom label support
+    file->WriteInt32(PIE_CONFIG_MAGIC_V16);
 
     Int32 profileCount = (Int32)m_profiles.GetCount();
     file->WriteInt32(profileCount);
@@ -1656,14 +1954,59 @@ Bool PieProfileManager::SaveToFile()
             file->WriteInt32(prof.slots[s].shiftCommandId);
             file->WriteInt32(prof.slots[s].ctrlCommandId);
             file->WriteInt32(prof.slots[s].altCommandId);
+            file->WriteString(prof.slots[s].shiftCustomLabel);
+            file->WriteString(prof.slots[s].ctrlCustomLabel);
+            file->WriteString(prof.slots[s].altCustomLabel);
 
-            // V14: Tool preset
+            // V15: Main preset
             file->WriteInt32((Int32)prof.slots[s].toolPresetMode);
             file->WriteString(prof.slots[s].toolPresetName);
             file->WriteString(prof.slots[s].toolPresetAssetId);
             if (prof.slots[s].toolPresetMode == ToolPresetMode::Snapshot)
             {
                 std::string sJson = ContainerToJson(prof.slots[s].toolSettings).Dump(0);
+                file->WriteString(StdStringToC4DString(sJson));
+            }
+            else
+            {
+                file->WriteString(""_s);
+            }
+
+            // V15: Shift preset
+            file->WriteInt32((Int32)prof.slots[s].shiftPresetMode);
+            file->WriteString(prof.slots[s].shiftPresetName);
+            file->WriteString(prof.slots[s].shiftPresetAssetId);
+            if (prof.slots[s].shiftPresetMode == ToolPresetMode::Snapshot)
+            {
+                std::string sJson = ContainerToJson(prof.slots[s].shiftSettings).Dump(0);
+                file->WriteString(StdStringToC4DString(sJson));
+            }
+            else
+            {
+                file->WriteString(""_s);
+            }
+
+            // V15: Ctrl preset
+            file->WriteInt32((Int32)prof.slots[s].ctrlPresetMode);
+            file->WriteString(prof.slots[s].ctrlPresetName);
+            file->WriteString(prof.slots[s].ctrlPresetAssetId);
+            if (prof.slots[s].ctrlPresetMode == ToolPresetMode::Snapshot)
+            {
+                std::string sJson = ContainerToJson(prof.slots[s].ctrlSettings).Dump(0);
+                file->WriteString(StdStringToC4DString(sJson));
+            }
+            else
+            {
+                file->WriteString(""_s);
+            }
+
+            // V15: Alt preset
+            file->WriteInt32((Int32)prof.slots[s].altPresetMode);
+            file->WriteString(prof.slots[s].altPresetName);
+            file->WriteString(prof.slots[s].altPresetAssetId);
+            if (prof.slots[s].altPresetMode == ToolPresetMode::Snapshot)
+            {
+                std::string sJson = ContainerToJson(prof.slots[s].altSettings).Dump(0);
                 file->WriteString(StdStringToC4DString(sJson));
             }
             else

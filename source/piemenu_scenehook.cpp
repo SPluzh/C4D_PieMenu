@@ -139,7 +139,7 @@ void PieMenuSceneHook::CommitSelection()
                         PieMenuOverlay::SuppressModifierKeys();
                     }
                     CallCommand(cmd);
-                    slot.ApplyToolPreset(GetActiveDocument(), cmd);
+                    slot.ApplyToolPreset(GetActiveDocument(), cmd, shiftHeld, ctrlHeld, altHeld);
                 }
             }
         }

@@ -866,7 +866,7 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
         SuppressModifierKeys();
 
         CallCommand(customCmd);
-        slot.ApplyToolPreset(doc, customCmd);
+        slot.ApplyToolPreset(doc, customCmd, shiftDown, ctrlDown, altDown);
 
         // Safeguard: if Cinema 4D natively parented or childed the initial selection, revert it
         if (doc && !initialSelection.IsEmpty())
@@ -965,7 +965,7 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
     {
         SuppressModifierKeys();
         CallCommand(baseCmd);
-        slot.ApplyToolPreset(GetActiveDocument(), baseCmd);
+        slot.ApplyToolPreset(GetActiveDocument(), baseCmd, false, false, false);
         return;
     }
 
@@ -973,7 +973,7 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
     if (!doc)
     {
         CallCommand(baseCmd);
-        slot.ApplyToolPreset(nullptr, baseCmd);
+        slot.ApplyToolPreset(nullptr, baseCmd, shiftDown, ctrlDown, altDown);
         return;
     }
 
@@ -997,7 +997,7 @@ void PieMenuOverlay::ExecuteSlotCommand(const PieSlot& slot, Bool shiftDown, Boo
 
     // Execute the command
     CallCommand(baseCmd);
-    slot.ApplyToolPreset(doc, baseCmd);
+    slot.ApplyToolPreset(doc, baseCmd, shiftDown, ctrlDown, altDown);
 
     // If no modifiers were down, standard execution is finished
     if (!altDown && !shiftDown && !ctrlDown)

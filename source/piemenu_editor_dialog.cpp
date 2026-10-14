@@ -43,6 +43,8 @@ enum
     IDC_INSPECTOR_ENABLED,
     IDC_INSPECTOR_SUBMENU_COMBO,
     IDC_INSPECTOR_GOTO_SUBMENU,
+    IDC_GROUP_MAIN_ACTION,
+    IDC_INSPECTOR_MAIN_ICON,
     IDC_INSPECTOR_CMD_ID,
     IDC_INSPECTOR_CMD_NAME,
     IDC_INSPECTOR_PRESET_COMBO,
@@ -50,15 +52,43 @@ enum
     IDC_INSPECTOR_PRESET_CLEAR_BTN,
     IDC_INSPECTOR_PRESET_STATUS_TEXT,
     IDC_INSPECTOR_COLOR_FIELD,
+
+    IDC_GROUP_SHIFT_ACTION,
+    IDC_INSPECTOR_SHIFT_ICON,
+    IDC_INSPECTOR_SHIFT_NAME,
+    IDC_INSPECTOR_SHIFT_ID,
     IDC_INSPECTOR_SHIFT_LABEL,
     IDC_INSPECTOR_SHIFT_SET,
     IDC_INSPECTOR_SHIFT_CLEAR,
+    IDC_INSPECTOR_SHIFT_PRESET_COMBO,
+    IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN,
+    IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN,
+    IDC_INSPECTOR_SHIFT_PRESET_STATUS_TEXT,
+
+    IDC_GROUP_CTRL_ACTION,
+    IDC_INSPECTOR_CTRL_ICON,
+    IDC_INSPECTOR_CTRL_NAME,
+    IDC_INSPECTOR_CTRL_ID,
     IDC_INSPECTOR_CTRL_LABEL,
     IDC_INSPECTOR_CTRL_SET,
     IDC_INSPECTOR_CTRL_CLEAR,
+    IDC_INSPECTOR_CTRL_PRESET_COMBO,
+    IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN,
+    IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN,
+    IDC_INSPECTOR_CTRL_PRESET_STATUS_TEXT,
+
+    IDC_GROUP_ALT_ACTION,
+    IDC_INSPECTOR_ALT_ICON,
+    IDC_INSPECTOR_ALT_NAME,
+    IDC_INSPECTOR_ALT_ID,
     IDC_INSPECTOR_ALT_LABEL,
     IDC_INSPECTOR_ALT_SET,
     IDC_INSPECTOR_ALT_CLEAR,
+    IDC_INSPECTOR_ALT_PRESET_COMBO,
+    IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN,
+    IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN,
+    IDC_INSPECTOR_ALT_PRESET_STATUS_TEXT,
+
     IDC_INSPECTOR_CLEAR_SLOT,
     IDC_GLOBAL_RADIUS,
     IDC_GLOBAL_INNER_RADIUS,
@@ -204,6 +234,95 @@ static maxon::String GetSlotDisplayName(Int32 slotCount, Int32 sel)
     if (compIdx < 0) compIdx = 0;
 
     return FormatString("Slot @: @ (@deg)"_s, sel + 1, s_compass16[compIdx], (Int32)deg);
+}
+
+// ============================================================================
+// COMMAND ICON AREA IMPLEMENTATION
+// ============================================================================
+
+Bool CommandIconArea::GetMinSize(Int32& w, Int32& h)
+{
+    w = 34;
+    h = 34;
+    return true;
+}
+
+void CommandIconArea::DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const BaseContainer& msg)
+{
+    Int32 w = GetWidth();
+    Int32 h = GetHeight();
+
+    // Dark recessed well background
+    Vector wellBg = Vector(0.12, 0.12, 0.14);
+    if (!m_enabled)
+        wellBg = Vector(0.17, 0.17, 0.18);
+    else if (m_dragHover)
+        wellBg = Vector(0.15, 0.22, 0.32);
+
+    DrawSetPen(wellBg);
+    DrawRectangle(0, 0, w, h);
+
+    if (m_cmdId > 0 && m_enabled)
+    {
+        IconData icon;
+        if (GetIcon(m_cmdId, &icon) && icon.bmp)
+        {
+            Int32 drawflags = BMP_ALLOWALPHA | BMP_NORMALSCALED;
+            if (icon.flags & ICONDATAFLAGS::APPLYCOLORPROFILE)
+                drawflags |= BMP_APPLY_COLORPROFILE;
+
+            Int32 minDim = (w < h ? w : h);
+            Int32 targetSize = minDim > 6 ? (minDim - 6) : minDim;
+
+            Int32 targetW = targetSize;
+            Int32 targetH = targetSize;
+
+            if (icon.w > 0 && icon.h > 0)
+            {
+                Float aspect = (Float)icon.w / (Float)icon.h;
+                if (aspect > 1.05)
+                    targetH = (Int32)(targetSize / aspect + 0.5);
+                else if (aspect < 0.95)
+                    targetW = (Int32)(targetSize * aspect + 0.5);
+            }
+
+            Int32 ix = (w - targetW) / 2;
+            Int32 iy = (h - targetH) / 2;
+
+            DrawBitmap(icon.bmp, ix, iy, targetW, targetH, icon.x, icon.y, icon.w, icon.h, drawflags);
+
+            if (m_dragHover)
+            {
+                DrawSetPen(Vector(0.35, 0.70, 1.0));
+                DrawBorder(BORDER_ACTIVE_1, 0, 0, w - 1, h - 1);
+            }
+            else
+            {
+                DrawBorder(BORDER_THIN_IN, 0, 0, w - 1, h - 1);
+            }
+            return;
+        }
+    }
+
+    if (m_dragHover)
+    {
+        DrawSetPen(Vector(0.35, 0.70, 1.0));
+        DrawBorder(BORDER_ACTIVE_1, 0, 0, w - 1, h - 1);
+    }
+    else
+    {
+        DrawBorder(BORDER_THIN_IN, 0, 0, w - 1, h - 1);
+    }
+
+    // Centered subtle '+' crosshair when empty and enabled
+    if (m_enabled)
+    {
+        Int32 cx = w / 2;
+        Int32 cy = h / 2;
+        DrawSetPen(m_dragHover ? Vector(0.45, 0.80, 1.0) : Vector(0.32, 0.34, 0.38));
+        DrawLine(cx - 5, cy, cx + 5, cy);
+        DrawLine(cx, cy - 5, cx, cy + 5);
+    }
 }
 
 // ============================================================================
@@ -803,11 +922,13 @@ Bool PieMenuEditorDialog::CreateLayout()
     GroupBegin(IDC_GROUP_INSPECTOR, BFH_SCALEFIT, 2, 0, "Selected Slot Properties"_s, BORDER_GROUP_IN);
     GroupBorderSpace(10, 6, 10, 6);
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Slot Position:"_s, 0);
-    AddStaticText(IDC_INSPECTOR_SLOT_TITLE, BFH_SCALEFIT, 0, 0, ""_s, 0);
-
     AddStaticText(0, BFH_LEFT, 0, 0, "Enabled:"_s, 0);
-    AddCheckbox(IDC_INSPECTOR_ENABLED, BFH_LEFT, 0, 0, "Slot Active in Menu"_s);
+    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupSpace(8, 0);
+    AddCheckbox(IDC_INSPECTOR_ENABLED, BFH_LEFT, 0, 0, "Active in Menu"_s);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Accent Color:"_s, 0);
+    AddColorField(IDC_INSPECTOR_COLOR_FIELD, BFH_LEFT, 60, 18);
+    GroupEnd();
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Submenu Link:"_s, 0);
     GroupBegin(0, BFH_SCALEFIT, 2, 0, ""_s, 0);
@@ -816,12 +937,14 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddButton(IDC_INSPECTOR_GOTO_SUBMENU, BFH_LEFT, 80, 0, "Edit Menu ->"_s);
     GroupEnd();
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Custom Label:"_s, 0);
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
-    GroupSpace(6, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Main Action:"_s, 0);
+    GroupBegin(IDC_GROUP_MAIN_ACTION, BFH_SCALEFIT, 5, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddUserArea(IDC_INSPECTOR_MAIN_ICON, BFH_LEFT | BFV_CENTER, 34, 34);
+    AttachUserArea(m_mainIconArea, IDC_INSPECTOR_MAIN_ICON);
     AddEditText(IDC_INSPECTOR_CMD_NAME, BFH_SCALEFIT, 120, 0);
-    AddStaticText(0, BFH_LEFT, 0, 0, "Command ID:"_s, 0);
-    AddEditNumber(IDC_INSPECTOR_CMD_ID, BFH_LEFT, 75, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "ID:"_s, 0);
+    AddEditNumber(IDC_INSPECTOR_CMD_ID, BFH_LEFT, 65, 0);
     GroupEnd();
 
     AddStaticText(0, BFH_LEFT, 0, 0, "Preset:"_s, 0);
@@ -833,31 +956,67 @@ Bool PieMenuEditorDialog::CreateLayout()
     AddStaticText(IDC_INSPECTOR_PRESET_STATUS_TEXT, BFH_LEFT, 55, 0, ""_s, 0);
     GroupEnd();
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Accent Color:"_s, 0);
-    AddColorField(IDC_INSPECTOR_COLOR_FIELD, BFH_LEFT, 60, 18);
-
     AddStaticText(0, BFH_LEFT, 0, 0, "Shift Action:"_s, 0);
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    GroupBegin(IDC_GROUP_SHIFT_ACTION, BFH_SCALEFIT, 7, 0, ""_s, 0);
     GroupSpace(4, 0);
-    AddStaticText(IDC_INSPECTOR_SHIFT_LABEL, BFH_SCALEFIT, 110, 0, "Default (Child / Options)"_s, 0);
-    AddButton(IDC_INSPECTOR_SHIFT_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddUserArea(IDC_INSPECTOR_SHIFT_ICON, BFH_LEFT | BFV_CENTER, 34, 34);
+    AttachUserArea(m_shiftIconArea, IDC_INSPECTOR_SHIFT_ICON);
+    AddEditText(IDC_INSPECTOR_SHIFT_NAME, BFH_SCALEFIT, 100, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "ID:"_s, 0);
+    AddEditNumber(IDC_INSPECTOR_SHIFT_ID, BFH_LEFT, 65, 0);
+    AddButton(IDC_INSPECTOR_SHIFT_SET, BFH_LEFT, 55, 0, "Set Sel"_s);
     AddButton(IDC_INSPECTOR_SHIFT_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
     GroupEnd();
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Ctrl Action:"_s, 0);
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Shift Preset:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
     GroupSpace(4, 0);
-    AddStaticText(IDC_INSPECTOR_CTRL_LABEL, BFH_SCALEFIT, 110, 0, "Default (World Origin)"_s, 0);
-    AddButton(IDC_INSPECTOR_CTRL_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddComboBox(IDC_INSPECTOR_SHIFT_PRESET_COMBO, BFH_SCALEFIT, 130, 0);
+    AddButton(IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN, BFH_LEFT, 70, 0, "Snapshot"_s);
+    AddButton(IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN, BFH_LEFT, 45, 0, "Reset"_s);
+    AddStaticText(IDC_INSPECTOR_SHIFT_PRESET_STATUS_TEXT, BFH_LEFT, 55, 0, ""_s, 0);
+    GroupEnd();
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Ctrl Action:"_s, 0);
+    GroupBegin(IDC_GROUP_CTRL_ACTION, BFH_SCALEFIT, 7, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddUserArea(IDC_INSPECTOR_CTRL_ICON, BFH_LEFT | BFV_CENTER, 34, 34);
+    AttachUserArea(m_ctrlIconArea, IDC_INSPECTOR_CTRL_ICON);
+    AddEditText(IDC_INSPECTOR_CTRL_NAME, BFH_SCALEFIT, 100, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "ID:"_s, 0);
+    AddEditNumber(IDC_INSPECTOR_CTRL_ID, BFH_LEFT, 65, 0);
+    AddButton(IDC_INSPECTOR_CTRL_SET, BFH_LEFT, 55, 0, "Set Sel"_s);
     AddButton(IDC_INSPECTOR_CTRL_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
     GroupEnd();
 
-    AddStaticText(0, BFH_LEFT, 0, 0, "Alt Action:"_s, 0);
-    GroupBegin(0, BFH_SCALEFIT, 3, 0, ""_s, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "Ctrl Preset:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
     GroupSpace(4, 0);
-    AddStaticText(IDC_INSPECTOR_ALT_LABEL, BFH_SCALEFIT, 110, 0, "Default (Make Parent)"_s, 0);
-    AddButton(IDC_INSPECTOR_ALT_SET, BFH_LEFT, 65, 0, "Set Sel"_s);
+    AddComboBox(IDC_INSPECTOR_CTRL_PRESET_COMBO, BFH_SCALEFIT, 130, 0);
+    AddButton(IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN, BFH_LEFT, 70, 0, "Snapshot"_s);
+    AddButton(IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN, BFH_LEFT, 45, 0, "Reset"_s);
+    AddStaticText(IDC_INSPECTOR_CTRL_PRESET_STATUS_TEXT, BFH_LEFT, 55, 0, ""_s, 0);
+    GroupEnd();
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Alt Action:"_s, 0);
+    GroupBegin(IDC_GROUP_ALT_ACTION, BFH_SCALEFIT, 7, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddUserArea(IDC_INSPECTOR_ALT_ICON, BFH_LEFT | BFV_CENTER, 34, 34);
+    AttachUserArea(m_altIconArea, IDC_INSPECTOR_ALT_ICON);
+    AddEditText(IDC_INSPECTOR_ALT_NAME, BFH_SCALEFIT, 100, 0);
+    AddStaticText(0, BFH_LEFT, 0, 0, "ID:"_s, 0);
+    AddEditNumber(IDC_INSPECTOR_ALT_ID, BFH_LEFT, 65, 0);
+    AddButton(IDC_INSPECTOR_ALT_SET, BFH_LEFT, 55, 0, "Set Sel"_s);
     AddButton(IDC_INSPECTOR_ALT_CLEAR, BFH_LEFT, 45, 0, "Reset"_s);
+    GroupEnd();
+
+    AddStaticText(0, BFH_LEFT, 0, 0, "Alt Preset:"_s, 0);
+    GroupBegin(0, BFH_SCALEFIT, 4, 0, ""_s, 0);
+    GroupSpace(4, 0);
+    AddComboBox(IDC_INSPECTOR_ALT_PRESET_COMBO, BFH_SCALEFIT, 130, 0);
+    AddButton(IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN, BFH_LEFT, 70, 0, "Snapshot"_s);
+    AddButton(IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN, BFH_LEFT, 45, 0, "Reset"_s);
+    AddStaticText(IDC_INSPECTOR_ALT_PRESET_STATUS_TEXT, BFH_LEFT, 55, 0, ""_s, 0);
     GroupEnd();
 
     AddStaticText(0, BFH_LEFT, 0, 0, ""_s, 0);
@@ -1345,20 +1504,102 @@ void PieMenuEditorDialog::RefreshSubmenuList()
     }
 }
 
-void PieMenuEditorDialog::PopulatePresetsForTool(Int32 cmdId)
+static Bool CapturePresetSnapshot(BaseDocument* doc, Int32 targetCmdId, BaseContainer& outData, String& outName)
 {
-    m_currentDiscoveredPresets.Reset();
+    if (!doc || targetCmdId <= 0)
+        return false;
+
+    // 1. Try tool data first if it's a tool
+    BaseContainer* toolBc = GetToolData(doc, targetCmdId, true);
+    if (!toolBc)
+        toolBc = GetToolData(doc, targetCmdId, false);
+    if (toolBc && !toolBc->IsEmpty())
+    {
+        outData = *toolBc;
+        outName = "Tool Settings"_s;
+        return true;
+    }
+
+    // 2. Try active object if type matches targetCmdId
+    BaseObject* activeObj = doc->GetActiveObject();
+    if (activeObj && activeObj->GetType() == targetCmdId)
+    {
+        outData = activeObj->GetData();
+        outName = activeObj->GetName();
+        return true;
+    }
+
+    // 3. Fallback: instantiate temporary default object if it's an object generator/primitive
+    BaseObject* tempObj = BaseObject::Alloc(targetCmdId);
+    if (tempObj)
+    {
+        outData = tempObj->GetData();
+        outName = "Object Defaults"_s;
+        BaseObject::Free(tempObj);
+        return true;
+    }
+
+    return false;
+}
+
+static void HandlePresetComboChange(
+    Int32 comboVal,
+    ToolPresetMode& outMode,
+    maxon::String& outPresetName,
+    maxon::String& outAssetId,
+    const BaseContainer& settings,
+    const maxon::BaseArray<PieMenuEditorDialog::DiscoveredPresetItem>& discoveredPresets)
+{
+    if (comboVal == 0)
+    {
+        outMode = ToolPresetMode::None;
+        outAssetId = ""_s;
+    }
+    else
+    {
+        Int32 snapComboId = !settings.IsEmpty() ? 1 : -1;
+        if (snapComboId > 0 && comboVal == snapComboId)
+        {
+            outMode = ToolPresetMode::Snapshot;
+            outAssetId = ""_s;
+            if (!outPresetName.IsPopulated())
+                outPresetName = "Active Settings"_s;
+        }
+        else
+        {
+            for (Int32 i = 0; i < (Int32)discoveredPresets.GetCount(); ++i)
+            {
+                const PieMenuEditorDialog::DiscoveredPresetItem& dp = discoveredPresets[i];
+                if (dp.comboId == comboVal)
+                {
+                    outMode = ToolPresetMode::Asset;
+                    outAssetId = dp.assetId;
+                    outPresetName = dp.name;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+void PieMenuEditorDialog::PopulatePresetsForCommand(Int32 cmdId, maxon::BaseArray<DiscoveredPresetItem>& outPresets)
+{
+    outPresets.Reset();
     if (cmdId <= 0)
+    {
         return;
+    }
 
     maxon::AssetRepositoryRef repo = maxon::AssetInterface::GetUserPrefsRepository();
     if (!repo)
+    {
         return;
+    }
 
     maxon::String targetSub = FormatString("_@"_s, cmdId);
 
     repo.FindAssets(maxon::AssetTypes::DefaultsPreset(), maxon::Id(), maxon::Id(), maxon::ASSET_FIND_MODE::LATEST,
-        [this, &targetSub](const maxon::AssetDescription& asset) -> maxon::Result<maxon::Bool> {
+        [&outPresets, &targetSub](const maxon::AssetDescription& asset) -> maxon::Result<maxon::Bool> {
             iferr_scope;
             maxon::Id subTypeId = asset.GetMetaData().Get(maxon::ASSETMETADATA::SubType, maxon::Id()) iferr_ignore("Get");
             maxon::String subTypeStr = subTypeId.ToString();
@@ -1372,10 +1613,88 @@ void PieMenuEditorDialog::PopulatePresetsForTool(Int32 cmdId)
                 DiscoveredPresetItem item;
                 item.name = name;
                 item.assetId = asset.GetId().ToString();
-                m_currentDiscoveredPresets.Append(item) iferr_ignore("Append");
+                outPresets.Append(item) iferr_ignore("Append");
             }
             return true;
         }) iferr_ignore("FindAssets");
+}
+
+void PieMenuEditorDialog::PopulatePresetsForTool(Int32 cmdId)
+{
+    PopulatePresetsForCommand(cmdId, m_currentDiscoveredPresets);
+}
+
+void PieMenuEditorDialog::UpdatePresetRowUI(
+    Int32 comboId, Int32 captureBtnId, Int32 clearBtnId, Int32 statusTextId,
+    Int32 targetCmdId,
+    ToolPresetMode mode,
+    const maxon::String& presetName,
+    const maxon::String& presetAssetId,
+    const BaseContainer& settings,
+    maxon::BaseArray<DiscoveredPresetItem>& discoveredPresets,
+    Bool isSlotValid)
+{
+    FreeChildren(comboId);
+    AddChild(comboId, 0, "[Default]"_s);
+
+    if (targetCmdId <= 0)
+    {
+        SetInt32(comboId, 0);
+        Enable(comboId, false);
+        Enable(captureBtnId, false);
+        Enable(clearBtnId, false);
+        SetString(statusTextId, ""_s);
+        return;
+    }
+
+    PopulatePresetsForCommand(targetCmdId, discoveredPresets);
+
+    Int32 currentComboId = 0;
+    Int32 nextComboId = 1;
+
+    Bool hasSnap = !settings.IsEmpty();
+    if (hasSnap)
+    {
+        Int32 snapId = nextComboId++;
+        String snapTitle = "[Snapshot: Active Settings]"_s;
+        if (presetName.IsPopulated())
+            snapTitle = FormatString("[Snapshot: @]"_s, presetName);
+        AddChild(comboId, snapId, snapTitle);
+        if (mode == ToolPresetMode::Snapshot)
+            currentComboId = snapId;
+    }
+
+    for (Int32 i = 0; i < (Int32)discoveredPresets.GetCount(); ++i)
+    {
+        DiscoveredPresetItem& item = discoveredPresets[i];
+        item.comboId = nextComboId++;
+        AddChild(comboId, item.comboId, item.name);
+
+        if (mode == ToolPresetMode::Asset && presetAssetId == item.assetId)
+        {
+            currentComboId = item.comboId;
+        }
+    }
+
+    if (mode == ToolPresetMode::Asset && currentComboId == 0 && presetAssetId.IsPopulated())
+    {
+        Int32 extraId = nextComboId++;
+        String extraTitle = presetName.IsPopulated() ? presetName : "Asset Preset"_s;
+        AddChild(comboId, extraId, extraTitle);
+        currentComboId = extraId;
+    }
+
+    SetInt32(comboId, currentComboId);
+    Enable(comboId, isSlotValid);
+    Enable(captureBtnId, isSlotValid);
+    Enable(clearBtnId, isSlotValid && (mode != ToolPresetMode::None || hasSnap));
+
+    if (mode == ToolPresetMode::Snapshot)
+        SetString(statusTextId, "Snapshot"_s);
+    else if (mode == ToolPresetMode::Asset)
+        SetString(statusTextId, "Asset"_s);
+    else
+        SetString(statusTextId, hasSnap ? "Default (Saved Snap)"_s : "Default"_s);
 }
 
 Bool PieMenuEditorDialog::InitValues()
@@ -1705,7 +2024,14 @@ Bool PieMenuEditorDialog::IsAnyFieldActive()
         return false;
 
     if (s_activeDialog->IsActive(IDC_PROFILE_NAME_EDIT) ||
-        s_activeDialog->IsActive(IDC_INSPECTOR_SLOT_TITLE) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_CMD_NAME) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_CMD_ID) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_SHIFT_NAME) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_SHIFT_ID) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_CTRL_NAME) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_CTRL_ID) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_ALT_NAME) ||
+        s_activeDialog->IsActive(IDC_INSPECTOR_ALT_ID) ||
         s_activeDialog->IsActive(IDC_CMD_SEARCH))
     {
         return true;
@@ -1758,27 +2084,77 @@ void PieMenuEditorDialog::UpdateInspector()
     PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
     if (!prof)
     {
-        SetString(IDC_INSPECTOR_SLOT_TITLE, "No Menu Selected"_s);
+        SetString(IDC_GROUP_INSPECTOR, "No Menu Selected"_s);
         SetBool(IDC_INSPECTOR_ENABLED, false);
+        Enable(IDC_INSPECTOR_ENABLED, false);
+        Enable(IDC_INSPECTOR_COLOR_FIELD, false);
         SetInt32(IDC_INSPECTOR_SUBMENU_COMBO, 0);
+        Enable(IDC_INSPECTOR_SUBMENU_COMBO, false);
+        Enable(IDC_INSPECTOR_GOTO_SUBMENU, false);
         SetInt32(IDC_INSPECTOR_CMD_ID, 0);
+        Enable(IDC_INSPECTOR_CMD_ID, false);
         SetString(IDC_INSPECTOR_CMD_NAME, ""_s);
+        Enable(IDC_INSPECTOR_CMD_NAME, false);
         SetInt32(IDC_INSPECTOR_PRESET_COMBO, 0);
         Enable(IDC_INSPECTOR_PRESET_COMBO, false);
         Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, false);
         Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, false);
         SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, ""_s);
-        SetString(IDC_INSPECTOR_SHIFT_LABEL, "None"_s);
-        SetString(IDC_INSPECTOR_CTRL_LABEL, "None"_s);
-        SetString(IDC_INSPECTOR_ALT_LABEL, "None"_s);
-        Enable(IDC_INSPECTOR_GOTO_SUBMENU, false);
-        Enable(IDC_INSPECTOR_CMD_ID, false);
+
+        SetInt32(IDC_INSPECTOR_SHIFT_PRESET_COMBO, 0);
+        Enable(IDC_INSPECTOR_SHIFT_PRESET_COMBO, false);
+        Enable(IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN, false);
+        Enable(IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN, false);
+        SetString(IDC_INSPECTOR_SHIFT_PRESET_STATUS_TEXT, ""_s);
+
+        SetInt32(IDC_INSPECTOR_CTRL_PRESET_COMBO, 0);
+        Enable(IDC_INSPECTOR_CTRL_PRESET_COMBO, false);
+        Enable(IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN, false);
+        Enable(IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN, false);
+        SetString(IDC_INSPECTOR_CTRL_PRESET_STATUS_TEXT, ""_s);
+
+        SetInt32(IDC_INSPECTOR_ALT_PRESET_COMBO, 0);
+        Enable(IDC_INSPECTOR_ALT_PRESET_COMBO, false);
+        Enable(IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN, false);
+        Enable(IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN, false);
+        SetString(IDC_INSPECTOR_ALT_PRESET_STATUS_TEXT, ""_s);
+        m_mainIconArea.m_cmdId = NOTOK;
+        m_mainIconArea.m_enabled = false;
+        m_mainIconArea.Redraw();
+
+        m_shiftIconArea.m_cmdId = NOTOK;
+        m_shiftIconArea.m_enabled = false;
+        m_shiftIconArea.Redraw();
+
+        m_ctrlIconArea.m_cmdId = NOTOK;
+        m_ctrlIconArea.m_enabled = false;
+        m_ctrlIconArea.Redraw();
+
+        m_altIconArea.m_cmdId = NOTOK;
+        m_altIconArea.m_enabled = false;
+        m_altIconArea.Redraw();
+
+        SetInt32(IDC_INSPECTOR_SHIFT_ID, 0);
+        SetString(IDC_INSPECTOR_SHIFT_NAME, ""_s);
+        Enable(IDC_INSPECTOR_SHIFT_ID, false);
+        Enable(IDC_INSPECTOR_SHIFT_NAME, false);
         Enable(IDC_INSPECTOR_SHIFT_SET, false);
         Enable(IDC_INSPECTOR_SHIFT_CLEAR, false);
+
+        SetInt32(IDC_INSPECTOR_CTRL_ID, 0);
+        SetString(IDC_INSPECTOR_CTRL_NAME, ""_s);
+        Enable(IDC_INSPECTOR_CTRL_ID, false);
+        Enable(IDC_INSPECTOR_CTRL_NAME, false);
         Enable(IDC_INSPECTOR_CTRL_SET, false);
         Enable(IDC_INSPECTOR_CTRL_CLEAR, false);
+
+        SetInt32(IDC_INSPECTOR_ALT_ID, 0);
+        SetString(IDC_INSPECTOR_ALT_NAME, ""_s);
+        Enable(IDC_INSPECTOR_ALT_ID, false);
+        Enable(IDC_INSPECTOR_ALT_NAME, false);
         Enable(IDC_INSPECTOR_ALT_SET, false);
         Enable(IDC_INSPECTOR_ALT_CLEAR, false);
+        Enable(IDC_INSPECTOR_CLEAR_SLOT, false);
         return;
     }
 
@@ -1790,10 +2166,14 @@ void PieMenuEditorDialog::UpdateInspector()
         sel = 0;
 
     String slotName = GetSlotDisplayName(prof->slotCount, sel);
-    SetString(IDC_INSPECTOR_SLOT_TITLE, slotName);
+    SetString(IDC_GROUP_INSPECTOR, FormatString("Selected Slot: @"_s, slotName));
 
     const PieSlot& slot = prof->slots[sel];
     SetBool(IDC_INSPECTOR_ENABLED, slot.enabled);
+    Enable(IDC_INSPECTOR_ENABLED, true);
+
+    SetColorField(IDC_INSPECTOR_COLOR_FIELD, slot.accentColor, 1.0, 1.0, 0);
+    Enable(IDC_INSPECTOR_COLOR_FIELD, slot.enabled);
 
     // Update Submenu combo selection
     Int32 subComboSel = 0;
@@ -1809,119 +2189,99 @@ void PieMenuEditorDialog::UpdateInspector()
         }
     }
     SetInt32(IDC_INSPECTOR_SUBMENU_COMBO, subComboSel);
-    Enable(IDC_INSPECTOR_GOTO_SUBMENU, slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_SUBMENU_COMBO, slot.enabled);
+    Enable(IDC_INSPECTOR_GOTO_SUBMENU, slot.enabled && slot.IsSubMenu());
+
+    m_mainIconArea.m_cmdId = slot.commandId;
+    m_mainIconArea.m_enabled = slot.enabled && !slot.IsSubMenu();
+    m_mainIconArea.Redraw();
+
+    m_shiftIconArea.m_cmdId = slot.shiftCommandId;
+    m_shiftIconArea.m_enabled = slot.enabled && !slot.IsSubMenu();
+    m_shiftIconArea.Redraw();
+
+    m_ctrlIconArea.m_cmdId = slot.ctrlCommandId;
+    m_ctrlIconArea.m_enabled = slot.enabled && !slot.IsSubMenu();
+    m_ctrlIconArea.Redraw();
+
+    m_altIconArea.m_cmdId = slot.altCommandId;
+    m_altIconArea.m_enabled = slot.enabled && !slot.IsSubMenu();
+    m_altIconArea.Redraw();
 
     SetInt32(IDC_INSPECTOR_CMD_ID, slot.commandId > 0 ? slot.commandId : 0);
-    Enable(IDC_INSPECTOR_CMD_ID, !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_CMD_ID, slot.enabled && !slot.IsSubMenu());
     SetString(IDC_INSPECTOR_CMD_NAME, slot.customLabel);
-    SetColorField(IDC_INSPECTOR_COLOR_FIELD, slot.accentColor, 1.0, 1.0, 0);
+    Enable(IDC_INSPECTOR_CMD_NAME, slot.enabled);
 
     // Shift action
-    if (slot.shiftCommandId > 0)
-    {
-        String scName = GetCommandName(slot.shiftCommandId);
-        if (scName.IsEmpty()) scName = FormatString("Cmd @"_s, slot.shiftCommandId);
-        SetString(IDC_INSPECTOR_SHIFT_LABEL, scName);
-    }
-    else
-    {
-        SetString(IDC_INSPECTOR_SHIFT_LABEL, "Default (Child / Options)"_s);
-    }
-    Enable(IDC_INSPECTOR_SHIFT_SET, !slot.IsSubMenu());
-    Enable(IDC_INSPECTOR_SHIFT_CLEAR, !slot.IsSubMenu() && slot.shiftCommandId > 0);
+    SetInt32(IDC_INSPECTOR_SHIFT_ID, slot.shiftCommandId > 0 ? slot.shiftCommandId : 0);
+    String shiftDisplay = slot.shiftCommandId > 0 ? (slot.shiftCustomLabel.IsPopulated() ? slot.shiftCustomLabel : GetCommandName(slot.shiftCommandId)) : ""_s;
+    SetString(IDC_INSPECTOR_SHIFT_NAME, shiftDisplay);
+    Enable(IDC_INSPECTOR_SHIFT_ID, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_SHIFT_NAME, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_SHIFT_SET, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_SHIFT_CLEAR, slot.enabled && !slot.IsSubMenu() && slot.shiftCommandId > 0);
 
     // Ctrl action
-    if (slot.ctrlCommandId > 0)
-    {
-        String ccName = GetCommandName(slot.ctrlCommandId);
-        if (ccName.IsEmpty()) ccName = FormatString("Cmd @"_s, slot.ctrlCommandId);
-        SetString(IDC_INSPECTOR_CTRL_LABEL, ccName);
-    }
-    else
-    {
-        SetString(IDC_INSPECTOR_CTRL_LABEL, "Default (World Origin)"_s);
-    }
-    Enable(IDC_INSPECTOR_CTRL_SET, !slot.IsSubMenu());
-    Enable(IDC_INSPECTOR_CTRL_CLEAR, !slot.IsSubMenu() && slot.ctrlCommandId > 0);
+    SetInt32(IDC_INSPECTOR_CTRL_ID, slot.ctrlCommandId > 0 ? slot.ctrlCommandId : 0);
+    String ctrlDisplay = slot.ctrlCommandId > 0 ? (slot.ctrlCustomLabel.IsPopulated() ? slot.ctrlCustomLabel : GetCommandName(slot.ctrlCommandId)) : ""_s;
+    SetString(IDC_INSPECTOR_CTRL_NAME, ctrlDisplay);
+    Enable(IDC_INSPECTOR_CTRL_ID, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_CTRL_NAME, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_CTRL_SET, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_CTRL_CLEAR, slot.enabled && !slot.IsSubMenu() && slot.ctrlCommandId > 0);
 
     // Alt action
-    if (slot.altCommandId > 0)
-    {
-        String acName = GetCommandName(slot.altCommandId);
-        if (acName.IsEmpty()) acName = FormatString("Cmd @"_s, slot.altCommandId);
-        SetString(IDC_INSPECTOR_ALT_LABEL, acName);
-    }
-    else
-    {
-        SetString(IDC_INSPECTOR_ALT_LABEL, "Default (Make Parent)"_s);
-    }
-    Enable(IDC_INSPECTOR_ALT_SET, !slot.IsSubMenu());
-    Enable(IDC_INSPECTOR_ALT_CLEAR, !slot.IsSubMenu() && slot.altCommandId > 0);
+    SetInt32(IDC_INSPECTOR_ALT_ID, slot.altCommandId > 0 ? slot.altCommandId : 0);
+    String altDisplay = slot.altCommandId > 0 ? (slot.altCustomLabel.IsPopulated() ? slot.altCustomLabel : GetCommandName(slot.altCommandId)) : ""_s;
+    SetString(IDC_INSPECTOR_ALT_NAME, altDisplay);
+    Enable(IDC_INSPECTOR_ALT_ID, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_ALT_NAME, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_ALT_SET, slot.enabled && !slot.IsSubMenu());
+    Enable(IDC_INSPECTOR_ALT_CLEAR, slot.enabled && !slot.IsSubMenu() && slot.altCommandId > 0);
 
-    // Preset Inspector logic
-    Bool canHavePreset = (!slot.IsSubMenu() && slot.commandId > 0);
+    Bool isSlotValid = slot.enabled && (!slot.IsSubMenu() && slot.commandId > 0);
 
-    FreeChildren(IDC_INSPECTOR_PRESET_COMBO);
-    AddChild(IDC_INSPECTOR_PRESET_COMBO, 0, "[Default]"_s);
+    // Main Preset
+    UpdatePresetRowUI(
+        IDC_INSPECTOR_PRESET_COMBO, IDC_INSPECTOR_PRESET_CAPTURE_BTN,
+        IDC_INSPECTOR_PRESET_CLEAR_BTN, IDC_INSPECTOR_PRESET_STATUS_TEXT,
+        slot.commandId,
+        slot.toolPresetMode, slot.toolPresetName, slot.toolPresetAssetId, slot.toolSettings,
+        m_currentDiscoveredPresets,
+        isSlotValid);
 
-    if (!canHavePreset)
-    {
-        SetInt32(IDC_INSPECTOR_PRESET_COMBO, 0);
-        Enable(IDC_INSPECTOR_PRESET_COMBO, false);
-        Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, false);
-        Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, false);
-        SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, slot.IsSubMenu() ? ""_s : "No Command"_s);
-    }
-    else
-    {
-        PopulatePresetsForTool(slot.commandId);
+    // Shift Preset
+    Int32 shiftTargetCmd = (slot.shiftCommandId > 0) ? slot.shiftCommandId : slot.commandId;
+    UpdatePresetRowUI(
+        IDC_INSPECTOR_SHIFT_PRESET_COMBO, IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN,
+        IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN, IDC_INSPECTOR_SHIFT_PRESET_STATUS_TEXT,
+        shiftTargetCmd,
+        slot.shiftPresetMode, slot.shiftPresetName, slot.shiftPresetAssetId, slot.shiftSettings,
+        m_shiftDiscoveredPresets,
+        isSlotValid);
 
-        Int32 currentComboId = 0;
-        Int32 nextComboId = 1;
+    // Ctrl Preset
+    Int32 ctrlTargetCmd = (slot.ctrlCommandId > 0) ? slot.ctrlCommandId : slot.commandId;
+    UpdatePresetRowUI(
+        IDC_INSPECTOR_CTRL_PRESET_COMBO, IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN,
+        IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN, IDC_INSPECTOR_CTRL_PRESET_STATUS_TEXT,
+        ctrlTargetCmd,
+        slot.ctrlPresetMode, slot.ctrlPresetName, slot.ctrlPresetAssetId, slot.ctrlSettings,
+        m_ctrlDiscoveredPresets,
+        isSlotValid);
 
-        if (slot.HasSnapshot())
-        {
-            Int32 snapId = nextComboId++;
-            String snapTitle = "[Snapshot: Active Settings]"_s;
-            if (slot.toolPresetName.IsPopulated())
-                snapTitle = FormatString("[Snapshot: @]"_s, slot.toolPresetName);
-            AddChild(IDC_INSPECTOR_PRESET_COMBO, snapId, snapTitle);
-            if (slot.toolPresetMode == ToolPresetMode::Snapshot)
-                currentComboId = snapId;
-        }
+    // Alt Preset
+    Int32 altTargetCmd = (slot.altCommandId > 0) ? slot.altCommandId : slot.commandId;
+    UpdatePresetRowUI(
+        IDC_INSPECTOR_ALT_PRESET_COMBO, IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN,
+        IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN, IDC_INSPECTOR_ALT_PRESET_STATUS_TEXT,
+        altTargetCmd,
+        slot.altPresetMode, slot.altPresetName, slot.altPresetAssetId, slot.altSettings,
+        m_altDiscoveredPresets,
+        isSlotValid);
 
-        for (Int32 i = 0; i < (Int32)m_currentDiscoveredPresets.GetCount(); ++i)
-        {
-            DiscoveredPresetItem& item = m_currentDiscoveredPresets[i];
-            item.comboId = nextComboId++;
-            AddChild(IDC_INSPECTOR_PRESET_COMBO, item.comboId, item.name);
-
-            if (slot.toolPresetMode == ToolPresetMode::Asset && slot.toolPresetAssetId == item.assetId)
-            {
-                currentComboId = item.comboId;
-            }
-        }
-
-        if (slot.toolPresetMode == ToolPresetMode::Asset && currentComboId == 0 && slot.toolPresetAssetId.IsPopulated())
-        {
-            Int32 extraId = nextComboId++;
-            String extraTitle = slot.toolPresetName.IsPopulated() ? slot.toolPresetName : "Asset Preset"_s;
-            AddChild(IDC_INSPECTOR_PRESET_COMBO, extraId, extraTitle);
-            currentComboId = extraId;
-        }
-
-        SetInt32(IDC_INSPECTOR_PRESET_COMBO, currentComboId);
-        Enable(IDC_INSPECTOR_PRESET_COMBO, true);
-        Enable(IDC_INSPECTOR_PRESET_CAPTURE_BTN, true);
-        Enable(IDC_INSPECTOR_PRESET_CLEAR_BTN, slot.HasToolPreset() || slot.HasSnapshot());
-
-        if (slot.toolPresetMode == ToolPresetMode::Snapshot)
-            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, "Snapshot"_s);
-        else if (slot.toolPresetMode == ToolPresetMode::Asset)
-            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, "Asset"_s);
-        else
-            SetString(IDC_INSPECTOR_PRESET_STATUS_TEXT, slot.HasSnapshot() ? "Default (Saved Snap)"_s : "Default"_s);
-    }
+    Enable(IDC_INSPECTOR_CLEAR_SLOT, slot.enabled);
 }
 
 void PieMenuEditorDialog::ApplyInspectorChanges()
@@ -1982,11 +2342,83 @@ void PieMenuEditorDialog::ApplyInspectorChanges()
                 }
             }
         }
+
+        // Shift Action
+        Int32 newShiftId = 0;
+        if (GetInt32(IDC_INSPECTOR_SHIFT_ID, newShiftId))
+        {
+            if (newShiftId > 0)
+            {
+                if (slot.shiftCommandId != newShiftId)
+                {
+                    slot.ClearShiftPreset();
+                    slot.shiftCustomLabel = GetCommandName(newShiftId);
+                    SetString(IDC_INSPECTOR_SHIFT_NAME, slot.shiftCustomLabel);
+                }
+                slot.shiftCommandId = newShiftId;
+            }
+            else if (newShiftId == 0 && slot.shiftCommandId > 0)
+            {
+                slot.ClearShiftAction();
+            }
+        }
+
+        // Ctrl Action
+        Int32 newCtrlId = 0;
+        if (GetInt32(IDC_INSPECTOR_CTRL_ID, newCtrlId))
+        {
+            if (newCtrlId > 0)
+            {
+                if (slot.ctrlCommandId != newCtrlId)
+                {
+                    slot.ClearCtrlPreset();
+                    slot.ctrlCustomLabel = GetCommandName(newCtrlId);
+                    SetString(IDC_INSPECTOR_CTRL_NAME, slot.ctrlCustomLabel);
+                }
+                slot.ctrlCommandId = newCtrlId;
+            }
+            else if (newCtrlId == 0 && slot.ctrlCommandId > 0)
+            {
+                slot.ClearCtrlAction();
+            }
+        }
+
+        // Alt Action
+        Int32 newAltId = 0;
+        if (GetInt32(IDC_INSPECTOR_ALT_ID, newAltId))
+        {
+            if (newAltId > 0)
+            {
+                if (slot.altCommandId != newAltId)
+                {
+                    slot.ClearAltPreset();
+                    slot.altCustomLabel = GetCommandName(newAltId);
+                    SetString(IDC_INSPECTOR_ALT_NAME, slot.altCustomLabel);
+                }
+                slot.altCommandId = newAltId;
+            }
+            else if (newAltId == 0 && slot.altCommandId > 0)
+            {
+                slot.ClearAltAction();
+            }
+        }
     }
 
     String customName;
     if (GetString(IDC_INSPECTOR_CMD_NAME, customName))
         slot.customLabel = customName;
+
+    String shiftName;
+    if (GetString(IDC_INSPECTOR_SHIFT_NAME, shiftName))
+        slot.shiftCustomLabel = shiftName;
+
+    String ctrlName;
+    if (GetString(IDC_INSPECTOR_CTRL_NAME, ctrlName))
+        slot.ctrlCustomLabel = ctrlName;
+
+    String altName;
+    if (GetString(IDC_INSPECTOR_ALT_NAME, altName))
+        slot.altCustomLabel = altName;
 
     m_userArea.Redraw();
 }
@@ -2283,9 +2715,23 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
 
         case IDC_INSPECTOR_ENABLED:
         case IDC_INSPECTOR_CMD_ID:
-        case IDC_INSPECTOR_CMD_NAME:
+        case IDC_INSPECTOR_SHIFT_ID:
+        case IDC_INSPECTOR_CTRL_ID:
+        case IDC_INSPECTOR_ALT_ID:
         {
             ApplyInspectorChanges();
+            UpdateInspector();
+            m_userArea.Redraw();
+            break;
+        }
+
+        case IDC_INSPECTOR_CMD_NAME:
+        case IDC_INSPECTOR_SHIFT_NAME:
+        case IDC_INSPECTOR_CTRL_NAME:
+        case IDC_INSPECTOR_ALT_NAME:
+        {
+            ApplyInspectorChanges();
+            m_userArea.Redraw();
             break;
         }
 
@@ -2320,6 +2766,8 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                     {
                         prof->slots[sel].shiftCommandId = m_selectedCommand->id;
+                        prof->slots[sel].shiftCustomLabel = m_selectedCommand->name;
+                        prof->slots[sel].ClearShiftPreset();
                         UpdateInspector();
                         m_userArea.Redraw();
                     }
@@ -2336,7 +2784,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 Int32 sel = m_userArea.GetSelectedSlot();
                 if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
-                    prof->slots[sel].shiftCommandId = NOTOK;
+                    prof->slots[sel].ClearShiftAction();
                     UpdateInspector();
                     m_userArea.Redraw();
                 }
@@ -2355,6 +2803,8 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                     {
                         prof->slots[sel].ctrlCommandId = m_selectedCommand->id;
+                        prof->slots[sel].ctrlCustomLabel = m_selectedCommand->name;
+                        prof->slots[sel].ClearCtrlPreset();
                         UpdateInspector();
                         m_userArea.Redraw();
                     }
@@ -2371,7 +2821,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 Int32 sel = m_userArea.GetSelectedSlot();
                 if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
-                    prof->slots[sel].ctrlCommandId = NOTOK;
+                    prof->slots[sel].ClearCtrlAction();
                     UpdateInspector();
                     m_userArea.Redraw();
                 }
@@ -2390,6 +2840,8 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                     {
                         prof->slots[sel].altCommandId = m_selectedCommand->id;
+                        prof->slots[sel].altCustomLabel = m_selectedCommand->name;
+                        prof->slots[sel].ClearAltPreset();
                         UpdateInspector();
                         m_userArea.Redraw();
                     }
@@ -2406,7 +2858,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 Int32 sel = m_userArea.GetSelectedSlot();
                 if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
-                    prof->slots[sel].altCommandId = NOTOK;
+                    prof->slots[sel].ClearAltAction();
                     UpdateInspector();
                     m_userArea.Redraw();
                 }
@@ -2428,7 +2880,7 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                     prof->slots[sel].shiftCommandId = NOTOK;
                     prof->slots[sel].ctrlCommandId = NOTOK;
                     prof->slots[sel].altCommandId = NOTOK;
-                    prof->slots[sel].ClearToolPreset();
+                    prof->slots[sel].ClearAllPresets();
                     UpdateInspector();
                     m_userArea.Redraw();
                 }
@@ -2437,6 +2889,9 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         }
 
         case IDC_INSPECTOR_PRESET_CAPTURE_BTN:
+        case IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN:
+        case IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN:
+        case IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
             if (prof)
@@ -2450,52 +2905,46 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                         BaseDocument* doc = GetActiveDocument();
                         if (doc)
                         {
+                            Int32 targetCmd = slot.commandId;
+                            if (id == IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN)
+                                targetCmd = (slot.shiftCommandId > 0) ? slot.shiftCommandId : slot.commandId;
+                            else if (id == IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN)
+                                targetCmd = (slot.ctrlCommandId > 0) ? slot.ctrlCommandId : slot.commandId;
+                            else if (id == IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN)
+                                targetCmd = (slot.altCommandId > 0) ? slot.altCommandId : slot.commandId;
+
                             BaseContainer capturedData;
                             String capturedName = "Active Settings"_s;
-                            Bool captured = false;
-
-                            // 1. Try tool data first if it's a tool
-                            BaseContainer* toolBc = GetToolData(doc, slot.commandId, true);
-                            if (!toolBc)
-                                toolBc = GetToolData(doc, slot.commandId, false);
-                            if (toolBc && !toolBc->IsEmpty())
+                            if (CapturePresetSnapshot(doc, targetCmd, capturedData, capturedName))
                             {
-                                capturedData = *toolBc;
-                                capturedName = "Tool Settings"_s;
-                                captured = true;
-                            }
-
-                            // 2. Try active object if type matches commandId
-                            if (!captured)
-                            {
-                                BaseObject* activeObj = doc->GetActiveObject();
-                                if (activeObj && activeObj->GetType() == slot.commandId)
+                                if (id == IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN)
                                 {
-                                    capturedData = activeObj->GetData();
-                                    capturedName = activeObj->GetName();
-                                    captured = true;
+                                    slot.shiftPresetMode = ToolPresetMode::Snapshot;
+                                    slot.shiftSettings = capturedData;
+                                    slot.shiftPresetName = capturedName;
+                                    slot.shiftPresetAssetId = ""_s;
                                 }
-                            }
-
-                            // 3. Fallback: instantiate temporary default object if it's an object generator/primitive
-                            if (!captured)
-                            {
-                                BaseObject* tempObj = BaseObject::Alloc(slot.commandId);
-                                if (tempObj)
+                                else if (id == IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN)
                                 {
-                                    capturedData = tempObj->GetData();
-                                    capturedName = "Object Defaults"_s;
-                                    captured = true;
-                                    BaseObject::Free(tempObj);
+                                    slot.ctrlPresetMode = ToolPresetMode::Snapshot;
+                                    slot.ctrlSettings = capturedData;
+                                    slot.ctrlPresetName = capturedName;
+                                    slot.ctrlPresetAssetId = ""_s;
                                 }
-                            }
-
-                            if (captured)
-                            {
-                                slot.toolPresetMode = ToolPresetMode::Snapshot;
-                                slot.toolSettings = capturedData;
-                                slot.toolPresetName = capturedName;
-                                slot.toolPresetAssetId = ""_s;
+                                else if (id == IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN)
+                                {
+                                    slot.altPresetMode = ToolPresetMode::Snapshot;
+                                    slot.altSettings = capturedData;
+                                    slot.altPresetName = capturedName;
+                                    slot.altPresetAssetId = ""_s;
+                                }
+                                else
+                                {
+                                    slot.toolPresetMode = ToolPresetMode::Snapshot;
+                                    slot.toolSettings = capturedData;
+                                    slot.toolPresetName = capturedName;
+                                    slot.toolPresetAssetId = ""_s;
+                                }
                                 UpdateInspector();
                                 m_userArea.Redraw();
                             }
@@ -2507,6 +2956,9 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         }
 
         case IDC_INSPECTOR_PRESET_CLEAR_BTN:
+        case IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN:
+        case IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN:
+        case IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
             if (prof)
@@ -2515,7 +2967,15 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
                 {
                     PieSlot& slot = prof->slots[sel];
-                    slot.ClearToolPreset();
+                    if (id == IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN)
+                        slot.ClearShiftPreset();
+                    else if (id == IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN)
+                        slot.ClearCtrlPreset();
+                    else if (id == IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN)
+                        slot.ClearAltPreset();
+                    else
+                        slot.ClearToolPreset();
+
                     UpdateInspector();
                     m_userArea.Redraw();
                 }
@@ -2524,6 +2984,9 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
         }
 
         case IDC_INSPECTOR_PRESET_COMBO:
+        case IDC_INSPECTOR_SHIFT_PRESET_COMBO:
+        case IDC_INSPECTOR_CTRL_PRESET_COMBO:
+        case IDC_INSPECTOR_ALT_PRESET_COMBO:
         {
             PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
             if (prof)
@@ -2533,38 +2996,17 @@ Bool PieMenuEditorDialog::Command(Int32 id, const BaseContainer& msg)
                 {
                     PieSlot& slot = prof->slots[sel];
                     Int32 comboVal = 0;
-                    if (GetInt32(IDC_INSPECTOR_PRESET_COMBO, comboVal))
+                    if (GetInt32(id, comboVal))
                     {
-                        if (comboVal == 0)
-                        {
-                            slot.toolPresetMode = ToolPresetMode::None;
-                            slot.toolPresetAssetId = ""_s;
-                        }
+                        if (id == IDC_INSPECTOR_SHIFT_PRESET_COMBO)
+                            HandlePresetComboChange(comboVal, slot.shiftPresetMode, slot.shiftPresetName, slot.shiftPresetAssetId, slot.shiftSettings, m_shiftDiscoveredPresets);
+                        else if (id == IDC_INSPECTOR_CTRL_PRESET_COMBO)
+                            HandlePresetComboChange(comboVal, slot.ctrlPresetMode, slot.ctrlPresetName, slot.ctrlPresetAssetId, slot.ctrlSettings, m_ctrlDiscoveredPresets);
+                        else if (id == IDC_INSPECTOR_ALT_PRESET_COMBO)
+                            HandlePresetComboChange(comboVal, slot.altPresetMode, slot.altPresetName, slot.altPresetAssetId, slot.altSettings, m_altDiscoveredPresets);
                         else
-                        {
-                            Int32 snapComboId = slot.HasSnapshot() ? 1 : -1;
-                            if (snapComboId > 0 && comboVal == snapComboId)
-                            {
-                                slot.toolPresetMode = ToolPresetMode::Snapshot;
-                                slot.toolPresetAssetId = ""_s;
-                                if (!slot.toolPresetName.IsPopulated())
-                                    slot.toolPresetName = "Active Settings"_s;
-                            }
-                            else
-                            {
-                                for (Int32 i = 0; i < (Int32)m_currentDiscoveredPresets.GetCount(); ++i)
-                                {
-                                    const DiscoveredPresetItem& dp = m_currentDiscoveredPresets[i];
-                                    if (dp.comboId == comboVal)
-                                    {
-                                        slot.toolPresetMode = ToolPresetMode::Asset;
-                                        slot.toolPresetAssetId = dp.assetId;
-                                        slot.toolPresetName = dp.name;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                            HandlePresetComboChange(comboVal, slot.toolPresetMode, slot.toolPresetName, slot.toolPresetAssetId, slot.toolSettings, m_currentDiscoveredPresets);
+
                         UpdateInspector();
                         m_userArea.Redraw();
                     }
@@ -2820,7 +3262,111 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
             void* object = nullptr;
             GetDragObject(msg, &type, &object);
 
-            if (type == DRAGTYPE_ASSET)
+            if (type == DRAGTYPE_COMMAND)
+            {
+                Int32 cmdId = PieMenuEditorArea::ExtractCommandId(type, object, msg);
+                if (cmdId > 0)
+                {
+                    PieProfileManager& mgr = PieProfileManager::Get();
+                    PieProfile* prof = mgr.GetProfile(m_userArea.GetActiveProfileIndex());
+                    if (prof)
+                    {
+                        Int32 sel = m_userArea.GetSelectedSlot();
+                        if (sel >= 0 && (sel < prof->slotCount || sel == CENTER_SLOT_INDEX))
+                        {
+                            PieSlot& slot = prof->slots[sel];
+
+                            Bool inShift = CheckDropArea(IDC_GROUP_SHIFT_ACTION, msg, true, true) ||
+                                           CheckDropArea(IDC_INSPECTOR_SHIFT_ICON, msg, true, true) ||
+                                           CheckDropArea(IDC_INSPECTOR_SHIFT_NAME, msg, true, true) ||
+                                           CheckDropArea(IDC_INSPECTOR_SHIFT_ID, msg, true, true);
+
+                            Bool inCtrl = CheckDropArea(IDC_GROUP_CTRL_ACTION, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_CTRL_ICON, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_CTRL_NAME, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_CTRL_ID, msg, true, true);
+
+                            Bool inAlt = CheckDropArea(IDC_GROUP_ALT_ACTION, msg, true, true) ||
+                                         CheckDropArea(IDC_INSPECTOR_ALT_ICON, msg, true, true) ||
+                                         CheckDropArea(IDC_INSPECTOR_ALT_NAME, msg, true, true) ||
+                                         CheckDropArea(IDC_INSPECTOR_ALT_ID, msg, true, true);
+
+                            Bool inMain = CheckDropArea(IDC_GROUP_MAIN_ACTION, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_MAIN_ICON, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_CMD_NAME, msg, true, true) ||
+                                          CheckDropArea(IDC_INSPECTOR_CMD_ID, msg, true, true);
+
+                            Bool hoverShift = inShift;
+                            Bool hoverCtrl = inCtrl;
+                            Bool hoverAlt = inAlt;
+                            Bool hoverMain = inMain;
+
+                            if (msg.GetInt32(BFM_DRAG_FINISHED))
+                            {
+                                hoverShift = false;
+                                hoverCtrl = false;
+                                hoverAlt = false;
+                                hoverMain = false;
+                            }
+
+                            if (m_mainIconArea.m_dragHover != hoverMain ||
+                                m_shiftIconArea.m_dragHover != hoverShift ||
+                                m_ctrlIconArea.m_dragHover != hoverCtrl ||
+                                m_altIconArea.m_dragHover != hoverAlt)
+                            {
+                                m_mainIconArea.m_dragHover = hoverMain;
+                                m_shiftIconArea.m_dragHover = hoverShift;
+                                m_ctrlIconArea.m_dragHover = hoverCtrl;
+                                m_altIconArea.m_dragHover = hoverAlt;
+                                m_mainIconArea.Redraw();
+                                m_shiftIconArea.Redraw();
+                                m_ctrlIconArea.Redraw();
+                                m_altIconArea.Redraw();
+                            }
+
+                            if (inShift || inCtrl || inAlt || inMain)
+                            {
+                                if (msg.GetInt32(BFM_DRAG_FINISHED))
+                                {
+                                    slot.enabled = true;
+                                    String cmdName = GetCommandName(cmdId);
+
+                                    if (inShift)
+                                    {
+                                        slot.shiftCommandId = cmdId;
+                                        slot.shiftCustomLabel = cmdName;
+                                        slot.ClearShiftPreset();
+                                    }
+                                    else if (inCtrl)
+                                    {
+                                        slot.ctrlCommandId = cmdId;
+                                        slot.ctrlCustomLabel = cmdName;
+                                        slot.ClearCtrlPreset();
+                                    }
+                                    else if (inAlt)
+                                    {
+                                        slot.altCommandId = cmdId;
+                                        slot.altCustomLabel = cmdName;
+                                        slot.ClearAltPreset();
+                                    }
+                                    else if (inMain)
+                                    {
+                                        slot.commandId = cmdId;
+                                        slot.customLabel = cmdName;
+                                        slot.subMenuName = ""_s;
+                                        slot.ClearToolPreset();
+                                    }
+
+                                    UpdateInspector();
+                                    m_userArea.Redraw();
+                                }
+                                return SetDragDestination(MOUSE_POINT_HAND);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (type == DRAGTYPE_ASSET)
             {
                 if (msg.GetInt32(BFM_DRAG_FINISHED))
                 {
@@ -2844,9 +3390,43 @@ Int32 PieMenuEditorDialog::Message(const BaseContainer& msg, BaseContainer& resu
                                     if (assetName.IsEmpty())
                                         assetName = assetIdStr;
 
-                                    slot.toolPresetMode = ToolPresetMode::Asset;
-                                    slot.toolPresetAssetId = assetIdStr;
-                                    slot.toolPresetName = assetName;
+                                    Bool inShiftPreset = CheckDropArea(IDC_INSPECTOR_SHIFT_PRESET_COMBO, msg, true, true) ||
+                                                         CheckDropArea(IDC_INSPECTOR_SHIFT_PRESET_CAPTURE_BTN, msg, true, true) ||
+                                                         CheckDropArea(IDC_INSPECTOR_SHIFT_PRESET_CLEAR_BTN, msg, true, true) ||
+                                                         CheckDropArea(IDC_INSPECTOR_SHIFT_PRESET_STATUS_TEXT, msg, true, true);
+                                    Bool inCtrlPreset = CheckDropArea(IDC_INSPECTOR_CTRL_PRESET_COMBO, msg, true, true) ||
+                                                        CheckDropArea(IDC_INSPECTOR_CTRL_PRESET_CAPTURE_BTN, msg, true, true) ||
+                                                        CheckDropArea(IDC_INSPECTOR_CTRL_PRESET_CLEAR_BTN, msg, true, true) ||
+                                                        CheckDropArea(IDC_INSPECTOR_CTRL_PRESET_STATUS_TEXT, msg, true, true);
+                                    Bool inAltPreset = CheckDropArea(IDC_INSPECTOR_ALT_PRESET_COMBO, msg, true, true) ||
+                                                       CheckDropArea(IDC_INSPECTOR_ALT_PRESET_CAPTURE_BTN, msg, true, true) ||
+                                                       CheckDropArea(IDC_INSPECTOR_ALT_PRESET_CLEAR_BTN, msg, true, true) ||
+                                                       CheckDropArea(IDC_INSPECTOR_ALT_PRESET_STATUS_TEXT, msg, true, true);
+
+                                    if (inShiftPreset)
+                                    {
+                                        slot.shiftPresetMode = ToolPresetMode::Asset;
+                                        slot.shiftPresetAssetId = assetIdStr;
+                                        slot.shiftPresetName = assetName;
+                                    }
+                                    else if (inCtrlPreset)
+                                    {
+                                        slot.ctrlPresetMode = ToolPresetMode::Asset;
+                                        slot.ctrlPresetAssetId = assetIdStr;
+                                        slot.ctrlPresetName = assetName;
+                                    }
+                                    else if (inAltPreset)
+                                    {
+                                        slot.altPresetMode = ToolPresetMode::Asset;
+                                        slot.altPresetAssetId = assetIdStr;
+                                        slot.altPresetName = assetName;
+                                    }
+                                    else
+                                    {
+                                        slot.toolPresetMode = ToolPresetMode::Asset;
+                                        slot.toolPresetAssetId = assetIdStr;
+                                        slot.toolPresetName = assetName;
+                                    }
                                     slot.enabled = true;
 
                                     UpdateInspector();

@@ -34,8 +34,11 @@ struct PieSlot
     Vector        accentColor = Vector(0.25, 0.65, 1.0);
     Bool          enabled = true;
     Int32         shiftCommandId = NOTOK;
+    maxon::String shiftCustomLabel;
     Int32         ctrlCommandId = NOTOK;
+    maxon::String ctrlCustomLabel;
     Int32         altCommandId = NOTOK;
+    maxon::String altCustomLabel;
 
     // Tool preset settings (Option 4: Hybrid)
     ToolPresetMode toolPresetMode = ToolPresetMode::None;
@@ -43,9 +46,46 @@ struct PieSlot
     maxon::String  toolPresetAssetId;
     BaseContainer  toolSettings;
 
+    // Shift preset settings
+    ToolPresetMode shiftPresetMode = ToolPresetMode::None;
+    maxon::String  shiftPresetName;
+    maxon::String  shiftPresetAssetId;
+    BaseContainer  shiftSettings;
+
+    // Ctrl preset settings
+    ToolPresetMode ctrlPresetMode = ToolPresetMode::None;
+    maxon::String  ctrlPresetName;
+    maxon::String  ctrlPresetAssetId;
+    BaseContainer  ctrlSettings;
+
+    // Alt preset settings
+    ToolPresetMode altPresetMode = ToolPresetMode::None;
+    maxon::String  altPresetName;
+    maxon::String  altPresetAssetId;
+    BaseContainer  altSettings;
+
     Bool IsSubMenu() const { return subMenuName.IsPopulated(); }
     Bool HasToolPreset() const { return toolPresetMode != ToolPresetMode::None; }
     Bool HasSnapshot() const { return !toolSettings.IsEmpty(); }
+
+    Bool HasShiftPreset() const { return shiftPresetMode != ToolPresetMode::None; }
+    Bool HasShiftSnapshot() const { return !shiftSettings.IsEmpty(); }
+
+    Bool HasCtrlPreset() const { return ctrlPresetMode != ToolPresetMode::None; }
+    Bool HasCtrlSnapshot() const { return !ctrlSettings.IsEmpty(); }
+
+    Bool HasAltPreset() const { return altPresetMode != ToolPresetMode::None; }
+    Bool HasAltSnapshot() const { return !altSettings.IsEmpty(); }
+
+    Bool HasModifierPresets() const
+    {
+        return (shiftPresetMode != ToolPresetMode::None || ctrlPresetMode != ToolPresetMode::None || altPresetMode != ToolPresetMode::None);
+    }
+    Bool HasAnyPreset() const
+    {
+        return HasToolPreset() || HasModifierPresets();
+    }
+
     void ClearToolPreset()
     {
         toolPresetMode = ToolPresetMode::None;
@@ -53,7 +93,40 @@ struct PieSlot
         toolPresetAssetId = ""_s;
         toolSettings.FlushAll();
     }
-    void ApplyToolPreset(BaseDocument* doc, Int32 executedCmd) const;
+
+    void ClearShiftPreset()
+    {
+        shiftPresetMode = ToolPresetMode::None;
+        shiftPresetName = ""_s;
+        shiftPresetAssetId = ""_s;
+        shiftSettings.FlushAll();
+    }
+
+    void ClearCtrlPreset()
+    {
+        ctrlPresetMode = ToolPresetMode::None;
+        ctrlPresetName = ""_s;
+        ctrlPresetAssetId = ""_s;
+        ctrlSettings.FlushAll();
+    }
+
+    void ClearAltPreset()
+    {
+        altPresetMode = ToolPresetMode::None;
+        altPresetName = ""_s;
+        altPresetAssetId = ""_s;
+        altSettings.FlushAll();
+    }
+
+    void ClearAllPresets()
+    {
+        ClearToolPreset();
+        ClearShiftPreset();
+        ClearCtrlPreset();
+        ClearAltPreset();
+    }
+
+    void ApplyToolPreset(BaseDocument* doc, Int32 executedCmd, Bool shift = false, Bool ctrl = false, Bool alt = false) const;
 
     maxon::String GetEffectiveTitle() const;
     Bool GetIconBitmap(IconData& outIcon) const;
@@ -69,6 +142,54 @@ struct PieSlot
     Bool HasModifierCommands() const
     {
         return (shiftCommandId > 0 || ctrlCommandId > 0 || altCommandId > 0);
+    }
+
+    void ClearShiftAction()
+    {
+        shiftCommandId = NOTOK;
+        shiftCustomLabel = ""_s;
+        ClearShiftPreset();
+    }
+
+    void ClearCtrlAction()
+    {
+        ctrlCommandId = NOTOK;
+        ctrlCustomLabel = ""_s;
+        ClearCtrlPreset();
+    }
+
+    void ClearAltAction()
+    {
+        altCommandId = NOTOK;
+        altCustomLabel = ""_s;
+        ClearAltPreset();
+    }
+
+    maxon::String GetEffectiveShiftTitle() const
+    {
+        if (shiftCustomLabel.IsPopulated())
+            return shiftCustomLabel;
+        if (shiftCommandId > 0)
+            return GetCommandName(shiftCommandId);
+        return ""_s;
+    }
+
+    maxon::String GetEffectiveCtrlTitle() const
+    {
+        if (ctrlCustomLabel.IsPopulated())
+            return ctrlCustomLabel;
+        if (ctrlCommandId > 0)
+            return GetCommandName(ctrlCommandId);
+        return ""_s;
+    }
+
+    maxon::String GetEffectiveAltTitle() const
+    {
+        if (altCustomLabel.IsPopulated())
+            return altCustomLabel;
+        if (altCommandId > 0)
+            return GetCommandName(altCommandId);
+        return ""_s;
     }
 
     maxon::String GetEffectiveTitleForModifiers(Bool shift, Bool ctrl, Bool alt) const;

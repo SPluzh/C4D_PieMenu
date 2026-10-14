@@ -85,6 +85,17 @@ public:
     virtual Int32 DoubleClick(void* root, void* userdata, void* obj, Int32 col, MouseInfo* mouseinfo) override;
 };
 
+class CommandIconArea : public GeUserArea
+{
+public:
+    Int32 m_cmdId = NOTOK;
+    Bool  m_enabled = true;
+    Bool  m_dragHover = false;
+
+    virtual Bool GetMinSize(Int32& w, Int32& h) override;
+    virtual void DrawMsg(Int32 x1, Int32 y1, Int32 x2, Int32 y2, const BaseContainer& msg) override;
+};
+
 class PieMenuEditorDialog : public GeDialog
 {
 public:
@@ -131,13 +142,34 @@ public:
     SubmenuItem* GetSelectedSubmenu() const { return m_selectedSubmenu; }
     void SetSelectedSubmenu(SubmenuItem* item) { m_selectedSubmenu = item; }
 
+    struct DiscoveredPresetItem
+    {
+        maxon::String name;
+        maxon::String assetId;
+        Int32 comboId = 0;
+    };
+
     void PopulatePresetsForTool(Int32 cmdId);
+    void PopulatePresetsForCommand(Int32 cmdId, maxon::BaseArray<DiscoveredPresetItem>& outPresets);
+    void UpdatePresetRowUI(
+        Int32 comboId, Int32 captureBtnId, Int32 clearBtnId, Int32 statusTextId,
+        Int32 targetCmdId,
+        ToolPresetMode mode,
+        const maxon::String& presetName,
+        const maxon::String& presetAssetId,
+        const BaseContainer& settings,
+        maxon::BaseArray<DiscoveredPresetItem>& discoveredPresets,
+        Bool isSlotValid);
 
     static PieMenuEditorDialog* s_activeDialog;
     Bool m_waitingForHotkey = false;
 
 private:
     PieMenuEditorArea m_userArea;
+    CommandIconArea   m_mainIconArea;
+    CommandIconArea   m_shiftIconArea;
+    CommandIconArea   m_ctrlIconArea;
+    CommandIconArea   m_altIconArea;
 
     TreeViewCustomGui* m_treeGui = nullptr;
     CommandListTreeView m_treeFunctions;
@@ -151,13 +183,10 @@ private:
     SubmenuItem* m_selectedSubmenu = nullptr;
 
 public:
-    struct DiscoveredPresetItem
-    {
-        maxon::String name;
-        maxon::String assetId;
-        Int32 comboId = 0;
-    };
     maxon::BaseArray<DiscoveredPresetItem> m_currentDiscoveredPresets;
+    maxon::BaseArray<DiscoveredPresetItem> m_shiftDiscoveredPresets;
+    maxon::BaseArray<DiscoveredPresetItem> m_ctrlDiscoveredPresets;
+    maxon::BaseArray<DiscoveredPresetItem> m_altDiscoveredPresets;
 };
 
 class PieMenuEditorCommand : public CommandData
